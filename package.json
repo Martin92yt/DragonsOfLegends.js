@@ -1,0 +1,27 @@
+{
+  "name": "dragons-of-legends.js",
+  "version": "0.0.1",
+  "description": "A modular TypeScript framework for building multiplayer RPG and MMORPG experiences.",
+  "homepage": "https://github.com/Martin92yt/DragonsOfLegends.js#readme",
+  "bugs": {
+    "url": "https://github.com/Martin92yt/DragonsOfLegends.js/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Martin92yt/DragonsOfLegends.js.git"
+  },
+  "license": "ISC",
+  "author": "Martin92yt",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "sandbox": "tsx ../sandbox/index.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "tsx": "^4.23.13"
+  }
+}
