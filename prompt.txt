@@ -1,0 +1,13 @@
+Refais ce code proprement en conservant exactement son fonctionnement et ses fonctionnalités actuelles.
+
+Améliore la lisibilité et la structure du code.
+Corrige les erreurs, incohérences ou mauvaises pratiques éventuelles.
+Simplifie le code lorsque c’est pertinent, sans modifier son comportement attendu.
+Utilise des noms de variables, fonctions et composants clairs et cohérents.
+Supprime le code inutile, redondant ou obsolète.
+Respecte les bonnes pratiques et les conventions propres au langage/framework utilisé.
+Assure-toi que le code reste maintenable, performant et facilement compréhensible.
+Ne supprime aucune fonctionnalité existante.
+Si une modification importante est nécessaire, explique brièvement pourquoi.
+
+Retourne directement la version finale du code, propre et prête à être utilisée.

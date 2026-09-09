@@ -3,5 +3,16 @@ import { Class } from "../enums/Player.Class.js";
 export interface Player {
     Name: string;
     Identifier: string;
-    Class: string; // Class
+    Class: Class;
+
+    Level: number;
+    Experience: number;
+
+    Health: number;
+    MaxHealth: number;
+
+    Strength: number;
+    Agility: number;
+    Intelligence: number;
+    Defense: number;
 }
