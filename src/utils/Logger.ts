@@ -49,6 +49,10 @@ export class Logger {
         this.log(LogLevel.FATAL, message, ...args);
     }
 
+    public blank(): void {
+        console.log("")
+    }
+
     private log(level: LogLevel, message: string, ...args: unknown[]): void {
         const timestamp = new Date().toLocaleTimeString("fr-FR", {
             hour: "2-digit",

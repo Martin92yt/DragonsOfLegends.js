@@ -1,108 +1,197 @@
 import Player from "../entity/Character.js";
 import PlayerDatabase from "../database/Character.repository.js";
-import { Class } from "../../enums/Player.Class.js";
+import { PlayerClass } from "../../enums/Player.Class.js";
 import { Logger } from "../utils/Logger.js";
 
+interface CreatePlayerOptions {
+    id: string;
+    name: string;
+    playerClass: PlayerClass;
+}
+
+interface PlayerCount {
+    active: number;
+    total: number;
+}
+
 export default class PlayerManager {
-    private readonly logger = new Logger({ context: "PlayerManager" });
+    private static readonly INACTIVITY_TIME = 15 * 60 * 1000;
+
+    #logger = new Logger({ context: "PlayerManager" });
+
     private readonly players = new Map<string, Player>();
-    private readonly timers = new Map<string, NodeJS.Timeout>();
+    private readonly unloadTimers = new Map<string, NodeJS.Timeout>();
     private readonly database = new PlayerDatabase();
-    private readonly inactivityTime = 15 * 60 * 1000;
+
+    public ensure(id: string): Player | undefined;
+    public ensure(options: CreatePlayerOptions): Player;
+    public ensure(
+        idOrOptions: string | CreatePlayerOptions,
+    ): Player | undefined {
+        if (typeof idOrOptions === "string") {
+            return this.get(idOrOptions);
+        }
+
+        const player = this.get(idOrOptions.id);
+        if (player) return player;
+
+        return this.create(idOrOptions);
+    }
 
     public get(id: string): Player | undefined {
         const player = this.players.get(id);
 
         if (player) {
-            this.resetUnloadTimer(id);
+            this.refreshUnloadTimer(id);
             return player;
         }
 
         const data = this.database.get(id);
+        if (!data) return undefined;
 
-        if (!data) {
-            return undefined;
-        }
-
-        const loadedPlayer = new Player(data.Identifier, data.Name, data.Class);
+        const loadedPlayer = new Player(
+            data.Identifier,
+            data.Name,
+            data.Class,
+            data.Level,
+            data.Experience,
+            data.Health,
+            data.MaxHealth,
+            data.Strength,
+            data.Agility,
+            data.Intelligence,
+            data.Defense,
+            data.AttributePoints,
+        );
 
         this.players.set(id, loadedPlayer);
-        this.resetUnloadTimer(id);
-        this.logger.debug(`Player ${id} loaded from database.`);
+        this.refreshUnloadTimer(id);
+
+        this.#logger.debug(`Player ${id} loaded from database.`);
 
         return loadedPlayer;
     }
 
-    public create(id: string, name: string, playerClass: Class): Player {
-        if (this.database.get(id)) {
+    public create(options: CreatePlayerOptions): Player {
+        const { id, name, playerClass } = options;
+
+        if (this.exist(id)) {
             throw new Error(`Player ${id} already exists.`);
         }
 
         const player = new Player(id, name, playerClass);
 
-        this.savePlayer(player);
         this.players.set(id, player);
-        this.resetUnloadTimer(id);
-        this.logger.debug(`Player ${id} created with class ${playerClass}.`);
+        this.save(player);
+        this.refreshUnloadTimer(id);
+
+        this.#logger.debug(
+            `Player ${id} created with class ${playerClass}.`,
+        );
 
         return player;
+    }
+
+    /**
+     * Check if a player exists in memory or in the database.
+     */
+    public exist(id: string): boolean {
+        return (
+            this.players.has(id) ||
+            this.database.get(id) !== undefined
+        );
+    }
+
+    /**
+     * Delete a player completely from memory and database.
+     */
+    public delete(id: string): boolean {
+        const exists = this.exist(id);
+
+        if (!exists) {
+            return false;
+        }
+
+        this.clearUnloadTimer(id);
+        this.players.delete(id);
+        this.database.delete(id);
+
+        this.#logger.debug(`Player ${id} permanently deleted.`);
+
+        return true;
+    }
+
+    /**
+     * Returns the number of active players and total players.
+     *
+     * active = players currently loaded in memory
+     * total  = players stored in database
+     */
+    public count(): PlayerCount {
+        return {
+            active: this.players.size,
+            total: this.database.count(),
+        };
     }
 
     public remove(id: string): void {
         const player = this.players.get(id);
 
         if (!player) {
+            this.clearUnloadTimer(id);
             return;
         }
 
-        this.savePlayer(player);
+        this.save(player);
         this.clearUnloadTimer(id);
         this.players.delete(id);
-        this.logger.debug(`Player ${id} unloaded from memory.`);
+
+        this.#logger.debug(`Player ${id} unloaded from memory.`);
     }
 
     public has(id: string): boolean {
-        return this.players.has(id);
+        return this.exist(id);
     }
 
     public get size(): number {
         return this.players.size;
     }
 
-    private resetUnloadTimer(id: string): void {
+    private refreshUnloadTimer(id: string): void {
         this.clearUnloadTimer(id);
 
-        const timer = setTimeout(() => this.remove(id), this.inactivityTime);
+        const timer = setTimeout(
+            () => this.remove(id),
+            PlayerManager.INACTIVITY_TIME,
+        );
 
         timer.unref();
-        this.timers.set(id, timer);
+        this.unloadTimers.set(id, timer);
     }
 
     private clearUnloadTimer(id: string): void {
-        const timer = this.timers.get(id);
+        const timer = this.unloadTimers.get(id);
 
-        if (!timer) {
-            return;
-        }
+        if (!timer) return;
 
         clearTimeout(timer);
-        this.timers.delete(id);
+        this.unloadTimers.delete(id);
     }
 
-    private savePlayer(player: Player): void {
+    private save(player: Player): void {
         this.database.save({
-            Name: player.name,
             Identifier: player.id,
-            Class: player.className,
+            Name: player.name,
+            Class: player.classId,
             Level: player.level,
-            Experience: player.experience,
-            Health: player.health,
-            MaxHealth: player.maxHealth,
-            Strength: player.strength,
-            Agility: player.agility,
-            Intelligence: player.intelligence,
-            Defense: player.defense,
-            AttributePoints: player.attributePoints,
+            Experience: player.experience.current,
+            Health: player.health.current,
+            MaxHealth: player.health.max,
+            Strength: player.attributes.strength,
+            Agility: player.attributes.agility,
+            Intelligence: player.attributes.intelligence,
+            Defense: player.attributes.defense,
+            AttributePoints: player.attributes.points,
         });
     }
 }

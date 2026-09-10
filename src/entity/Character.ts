@@ -1,5 +1,7 @@
-import { Class } from "../../enums/Player.Class.js";
+import { PlayerClass } from "../../enums/Player.Class.js";
 import { Logger } from "../utils/Logger.js";
+
+type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
 interface ClassStats {
     strength: number;
@@ -8,155 +10,262 @@ interface ClassStats {
     defense: number;
 }
 
+interface PlayerHealth {
+    current: number;
+    max: number;
+}
+
+interface PlayerExperience {
+    current: number;
+    required: number;
+}
+
+interface PlayerAttributes {
+    points: number;
+    strength: number;
+    agility: number;
+    intelligence: number;
+    defense: number;
+}
+
+export interface GainExperienceResult {
+    amount: number;
+    total: number;
+    leveledUp: boolean;
+    level: number;
+}
+
+export interface PlayerSnapshot {
+    id: string;
+    name: string;
+    classId: PlayerClass;
+    level: number;
+    experience: PlayerExperience;
+    health: PlayerHealth;
+    attributes: PlayerAttributes;
+}
+
 export default class Player {
-    private readonly logger = new Logger({ context: "Player" });
+    private static readonly BASE_HEALTH = 100;
+    private static readonly HEALTH_PER_LEVEL = 10;
+    private static readonly EXPERIENCE_PER_LEVEL = 100;
+
+    #logger: Logger;
 
     public level: number;
-    public experience: number;
-    public health: number;
-    public maxHealth: number;
-    public strength: number;
-    public agility: number;
-    public intelligence: number;
-    public defense: number;
-
-    public attributePoints: number;
+    public experience: PlayerExperience;
+    public health: PlayerHealth;
+    public attributes: PlayerAttributes;
 
     constructor(
         public readonly id: string,
         public name: string,
-        public readonly className: Class,
+        public readonly classId: PlayerClass,
         level = 1,
         experience = 0,
-        health = 100,
-        maxHealth = 100,
+        health = Player.BASE_HEALTH,
+        maxHealth = Player.BASE_HEALTH,
         strength?: number,
         agility?: number,
         intelligence?: number,
         defense?: number,
         attributePoints = 0,
     ) {
+        this.#logger = new Logger({ context: "Player" });
+
         const stats = this.getClassStats();
 
-        this.level = level;
-        this.experience = experience;
-        this.health = health;
-        this.maxHealth = maxHealth;
-        this.attributePoints = attributePoints;
+        this.level = Math.max(1, level);
 
-        this.strength = strength ?? stats.strength;
-        this.agility = agility ?? stats.agility;
-        this.intelligence = intelligence ?? stats.intelligence;
-        this.defense = defense ?? stats.defense;
+        this.experience = {
+            current: Math.max(0, experience),
+            required: this.level * Player.EXPERIENCE_PER_LEVEL,
+        };
 
-        this.logger.debug(`Player ${id} initialized.`);
+        this.health = {
+            current: Math.max(0, Math.min(health, maxHealth)),
+            max: Math.max(1, maxHealth),
+        };
+
+        this.attributes = {
+            points: Math.max(0, attributePoints),
+            strength: strength ?? stats.strength,
+            agility: agility ?? stats.agility,
+            intelligence: intelligence ?? stats.intelligence,
+            defense: defense ?? stats.defense,
+        };
+
+        this.#logger.debug(`Player ${this.id} initialized.`);
     }
 
-    public addExperience(amount: number): void {
-        if (amount <= 0) { return; }
-
-        this.experience += amount;
-
-        while (this.experience >= this.experienceToNextLevel) {
-            this.experience -= this.experienceToNextLevel;
-            this.levelUp();
+    public gainExperience(amount: number): GainExperienceResult {
+        if (amount <= 0) {
+            return {
+                amount: 0,
+                total: this.experience.current,
+                leveledUp: false,
+                level: this.level,
+            };
         }
-    }
 
-    public get experienceToNextLevel(): number {
-        return this.level * 100;
+        this.experience.current += amount;
+
+        let leveledUp = false;
+
+        while (this.experience.current >= this.experience.required) {
+            this.experience.current -= this.experience.required;
+            this.levelUp();
+            leveledUp = true;
+        }
+
+        this.#logger.debug(
+            `Player ${this.id} gained ${amount} experience (${this.experience.current}/${this.experience.required}).`,
+        );
+
+        return {
+            amount,
+            total: this.experience.current,
+            leveledUp,
+            level: this.level,
+        };
     }
 
     public attack(): number {
-        const damage = Math.max(1, this.strength + Math.floor(Math.random() * 6) - 2);
+        const damage = Math.max(
+            1,
+            this.attributes.strength + Math.floor(Math.random() * 6) - 2,
+        );
 
-        this.logger.debug(`Player ${this.id} attacks for ${damage} damage.`);
+        this.#logger.debug(
+            `Player ${this.id} attacks for ${damage} damage.`,
+        );
 
         return damage;
     }
 
     public takeDamage(damage: number): void {
-        const reducedDamage = Math.max(1, damage - Math.floor(this.defense / 2));
+        if (damage <= 0 || !this.isAlive()) return;
 
-        this.health = Math.max(0, this.health - reducedDamage);
+        const reducedDamage = Math.max(
+            1,
+            damage - Math.floor(this.attributes.defense / 2),
+        );
 
-        this.logger.debug(
-            `Player ${this.id} takes ${reducedDamage} damage (${this.health}/${this.maxHealth}).`,
+        this.health.current = Math.max(
+            0,
+            this.health.current - reducedDamage,
+        );
+
+        this.#logger.debug(
+            `Player ${this.id} takes ${reducedDamage} damage (${this.health.current}/${this.health.max}).`,
         );
     }
 
     public isAlive(): boolean {
-        return this.health > 0;
+        return this.health.current > 0;
     }
 
-    private getClassStats(): ClassStats {
-        switch (this.className) {
-            case Class.Warrior:
-                return this.generateStats({
-                    strength: 10,
-                    agility: 5,
-                    intelligence: 3,
-                    defense: 10,
-                });
-            case Class.Explorer:
-                return this.generateStats({
-                    strength: 6,
-                    agility: 10,
-                    intelligence: 6,
-                    defense: 5,
-                });
-            case Class.Mage:
-                return this.generateStats({
-                    strength: 3,
-                    agility: 5,
-                    intelligence: 12,
-                    defense: 4,
-                });
-            default:
-                throw new Error(`Unknown player class: ${this.className}`);
+    public levelUpSkill(attribute: Attribute): void {
+        if (this.attributes.points <= 0) {
+            throw new Error("No attribute points available.");
         }
+
+        this.attributes[attribute]++;
+        this.attributes.points--;
+
+        this.#logger.debug(
+            `Player ${this.id} increased ${attribute} to ${this.attributes[attribute]}.`,
+        );
     }
 
-    private generateStats(baseStats: ClassStats): ClassStats {
+    public toJSON(): PlayerSnapshot {
         return {
-            strength: this.randomize(baseStats.strength),
-            agility: this.randomize(baseStats.agility),
-            intelligence: this.randomize(baseStats.intelligence),
-            defense: this.randomize(baseStats.defense),
+            id: this.id,
+            name: this.name,
+            classId: this.classId,
+            level: this.level,
+            experience: {
+                current: this.experience.current,
+                required: this.experience.required,
+            },
+            health: {
+                current: this.health.current,
+                max: this.health.max,
+            },
+            attributes: {
+                points: this.attributes.points,
+                strength: this.attributes.strength,
+                agility: this.attributes.agility,
+                intelligence: this.attributes.intelligence,
+                defense: this.attributes.defense,
+            },
         };
-    }
-
-    private randomize(value: number): number {
-        const factor = 0.8 + Math.random() * 0.4;
-
-        return Math.max(1, Math.round(value * factor));
     }
 
     private levelUp(): void {
         this.level++;
-        this.maxHealth += 10;
-        this.health = this.maxHealth;
-        this.strength++;
-        this.agility++;
-        this.intelligence++;
-        this.defense++;
-        this.attributePoints++;
 
-        this.logger.info(`Player ${this.id} reached level ${this.level}.`);
+        this.health.max += Player.HEALTH_PER_LEVEL;
+        this.health.current = this.health.max;
+
+        this.attributes.strength++;
+        this.attributes.agility++;
+        this.attributes.intelligence++;
+        this.attributes.defense++;
+        this.attributes.points++;
+
+        this.experience.required =
+            this.level * Player.EXPERIENCE_PER_LEVEL;
+
+        this.#logger.info(
+            `Player ${this.id} reached level ${this.level}.`,
+        );
     }
 
-    public getAttributePoints(): number {
-        return this.attributePoints;
-    }
+    private getClassStats(): ClassStats {
+        const stats: Record<PlayerClass, ClassStats> = {
+            [PlayerClass.Warrior]: {
+                strength: 10,
+                agility: 5,
+                intelligence: 3,
+                defense: 10,
+            },
+            [PlayerClass.Explorer]: {
+                strength: 6,
+                agility: 10,
+                intelligence: 6,
+                defense: 5,
+            },
+            [PlayerClass.Mage]: {
+                strength: 3,
+                agility: 5,
+                intelligence: 12,
+                defense: 4,
+            },
+        };
 
-    public levelUpSkill(
-        skill: "strength" | "agility" | "intelligence" | "defense",
-    ): void {
-        if (this.attributePoints <= 0) {
-            throw new Error("No attribute points available.");
+        const classStats = stats[this.classId];
+
+        if (!classStats) {
+            throw new Error(`Unknown player class: ${this.classId}`);
         }
 
-        this[skill]++;
-        this.attributePoints--;
+        return this.generateStats(classStats);
+    }
+
+    private generateStats(stats: ClassStats): ClassStats {
+        return {
+            strength: this.randomize(stats.strength),
+            agility: this.randomize(stats.agility),
+            intelligence: this.randomize(stats.intelligence),
+            defense: this.randomize(stats.defense),
+        };
+    }
+
+    private randomize(value: number): number {
+        return Math.max(
+            1,
+            Math.round(value * (0.8 + Math.random() * 0.4)),
+        );
     }
 }

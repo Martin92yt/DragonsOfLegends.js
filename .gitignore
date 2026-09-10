@@ -3,4 +3,4 @@
 .git/
 node_modules/
 data/*
-prompt.txt
+note.txt

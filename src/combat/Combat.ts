@@ -3,7 +3,7 @@ import { Logger } from "../utils/Logger.js";
 import Enemy from "./Enemy.js";
 
 export default class Combat {
-    public readonly logger = new Logger({ context: "Combat" });
+    #logger = new Logger({ context: "Combat" });
 
     constructor(
         public readonly player: Player,
@@ -13,13 +13,13 @@ export default class Combat {
     public attack() {
         const playerDamage = this.enemy.takeDamage(this.getPlayerDamage());
 
-        this.logger.info(
+        this.#logger.info(
             `Player deals ${playerDamage} damage to enemy ${this.enemy.name}.`,
         );
 
         if (!this.enemy.isAlive()) {
-            this.player.addExperience(this.enemy.experience);
-            this.logger.info(`Player gains ${this.enemy.experience} experience.`);
+            this.player.gainExperience(this.enemy.experience);
+            this.#logger.info(`Player gains ${this.enemy.experience} experience.`);
 
             return {
                 playerDamage,
@@ -32,7 +32,7 @@ export default class Combat {
 
         const enemyDamage = Math.max(
             1,
-            this.enemy.strength - Math.floor(this.player.defense / 2),
+            this.enemy.strength - Math.floor(this.player.attributes.defense / 2),
         );
 
         this.player.takeDamage(enemyDamage);
@@ -52,12 +52,12 @@ export default class Combat {
 
     private getPlayerDamage(): number {
         const classStats = {
-            warrior: this.player.strength,
-            explorer: this.player.agility,
-            mage: this.player.intelligence,
+            warrior: this.player.attributes.strength,
+            explorer: this.player.attributes.agility,
+            mage: this.player.attributes.intelligence,
         };
 
-        const stat = classStats[this.player.className];
+        const stat = classStats[this.player.classId];
         const variation = Math.floor(Math.random() * 6) - 2;
 
         return Math.max(1, stat + variation);

@@ -1,9 +1,9 @@
-import { Class } from "../enums/Player.Class.js";
+import { PlayerClass } from "../enums/Player.Class.js";
 
 export interface Player {
     Name: string;
     Identifier: string;
-    Class: Class;
+    Class: PlayerClass;
     Level: number;
     Experience: number;
     Health: number;

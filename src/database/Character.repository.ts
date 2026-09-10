@@ -21,7 +21,7 @@ interface StatsRecord {
 }
 
 export default class PlayerDatabase {
-    private readonly logger = new Logger({ context: "PlayerDatabase" });
+    #logger = new Logger({ context: "PlayerDatabase" });
     private readonly database: Database.Database;
 
     constructor() {
@@ -29,7 +29,7 @@ export default class PlayerDatabase {
         this.database.pragma("foreign_keys = ON");
         this.createTables();
         this.migrateStats();
-        this.logger.info("Player database initialized successfully.");
+        this.#logger.info("Player database initialized successfully.");
     }
 
     public save(player: Player): void {
@@ -39,7 +39,7 @@ export default class PlayerDatabase {
         });
 
         transaction();
-        this.logger.debug(`Player ${player.Identifier} saved.`);
+        this.#logger.debug(`Player ${player.Identifier} saved.`);
     }
 
     public get(identifier: string): Player | undefined {
@@ -65,16 +65,29 @@ export default class PlayerDatabase {
         };
     }
 
-    public delete(identifier: string): void {
-        this.database
+    public delete(identifier: string): boolean {
+        const result = this.database
             .prepare(`
-                DELETE FROM Player
+                DELETE FROM players
                 WHERE Identifier = ?
             `)
             .run(identifier);
+        this.#logger.debug(`Player ${identifier} deleted.`);
 
-        this.logger.debug(`Player ${identifier} deleted.`);
+        return result.changes > 0;
     }
+
+    public count(): number {
+        const result = this.database
+            .prepare(`
+                SELECT COUNT(*) as count
+                FROM players
+            `)
+            .get() as { count: number };
+
+        return result.count;
+    }
+
 
     private createTables(): void {
         this.database.exec(`
@@ -121,7 +134,7 @@ export default class PlayerDatabase {
             if (existingColumns.has(column)) { continue; }
 
             this.database.exec(query);
-            this.logger.debug(`Added Stats.${column} column.`);
+            this.#logger.debug(`Added Stats.${column} column.`);
         }
     }
 
