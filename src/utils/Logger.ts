@@ -49,11 +49,7 @@ export class Logger {
         this.log(LogLevel.FATAL, message, ...args);
     }
 
-    private log(
-        level: LogLevel,
-        message: string,
-        ...args: unknown[]
-    ): void {
+    private log(level: LogLevel, message: string, ...args: unknown[]): void {
         const timestamp = new Date().toLocaleTimeString("fr-FR", {
             hour: "2-digit",
             minute: "2-digit",
@@ -66,9 +62,7 @@ export class Logger {
         ];
 
         if (this.context) {
-            parts.push(
-                `${Colors.context}[ ${this.context} ]${Colors.reset}`,
-            );
+            parts.push(`${Colors.context}[ ${this.context} ]${Colors.reset}`);
         }
 
         parts.push(`${Colors.message}${message}${Colors.reset}`);
@@ -79,15 +73,12 @@ export class Logger {
             case LogLevel.DEBUG:
                 console.debug(output, ...args);
                 break;
-
             case LogLevel.INFO:
                 console.info(output, ...args);
                 break;
-
             case LogLevel.WARN:
                 console.warn(output, ...args);
                 break;
-
             case LogLevel.ERROR:
             case LogLevel.FATAL:
                 console.error(output, ...args);
@@ -97,20 +88,11 @@ export class Logger {
 
     private getLevelColor(level: LogLevel): string {
         switch (level) {
-            case LogLevel.DEBUG:
-                return Colors.debug;
-
-            case LogLevel.INFO:
-                return Colors.info;
-
-            case LogLevel.WARN:
-                return Colors.warn;
-
-            case LogLevel.ERROR:
-                return Colors.error;
-
-            case LogLevel.FATAL:
-                return Colors.fatal;
+            case LogLevel.DEBUG: return Colors.debug;
+            case LogLevel.INFO: return Colors.info;
+            case LogLevel.WARN: return Colors.warn;
+            case LogLevel.ERROR: return Colors.error;
+            case LogLevel.FATAL: return Colors.fatal;
         }
     }
 }

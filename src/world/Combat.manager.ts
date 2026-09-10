@@ -1,12 +1,13 @@
-import Player from "../player/Character.js";
+import Player from "../entity/Character.js";
 import Combat from "../combat/Combat.js";
-import Enemy from "../combat/Enemy.js";
+import EnemyManager from "./Enemy.manager.js";
 import { Logger } from "../utils/Logger.js";
 
 export default class CombatManager {
     private readonly combats = new Map<string, Combat>();
+    private readonly enemies = new EnemyManager();
     private readonly logger = new Logger({ context: "CombatManager" });
-    
+
     public start(player: Player): Combat {
         const existingCombat = this.combats.get(player.id);
 
@@ -14,18 +15,11 @@ export default class CombatManager {
             throw new Error("Player is already in combat.");
         }
 
-        const enemy = new Enemy(
-            "Goblin",
-            50,
-            50,
-            6,
-            2,
-            25,
-        );
+        const enemy = this.enemies.create(player);
 
-        this.logger.info(`Starting combat for player ${player.id} against enemy ${enemy.name}.`);
+        this.logger.info(`Starting combat for player ${player.id} against ${enemy.name}.`);
+
         const combat = new Combat(player, enemy);
-
         this.combats.set(player.id, combat);
 
         return combat;

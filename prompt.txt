@@ -1,13 +1,47 @@
-Refais ce code proprement en conservant exactement son fonctionnement et ses fonctionnalités actuelles.
+Syntax :
+    Analyse et améliore la syntaxe de ce code pour le rendre plus professionnel, cohérent et agréable à utiliser.
 
-Améliore la lisibilité et la structure du code.
-Corrige les erreurs, incohérences ou mauvaises pratiques éventuelles.
-Simplifie le code lorsque c’est pertinent, sans modifier son comportement attendu.
-Utilise des noms de variables, fonctions et composants clairs et cohérents.
-Supprime le code inutile, redondant ou obsolète.
-Respecte les bonnes pratiques et les conventions propres au langage/framework utilisé.
-Assure-toi que le code reste maintenable, performant et facilement compréhensible.
-Ne supprime aucune fonctionnalité existante.
-Si une modification importante est nécessaire, explique brièvement pourquoi.
+    Respecte les conventions du langage/framework utilisé.
+    Améliore les noms de variables, fonctions, classes, composants, types et fichiers lorsque nécessaire.
+    Uniformise les conventions de nommage et la structure du code.
+    Améliore les signatures, types, paramètres et retours lorsqu’ils peuvent être plus propres ou intuitifs.
+    Améliore l’API publique pour la rendre simple, cohérente, fortement typée et facile à utiliser.
+    Corrige les incohérences de syntaxe ou de conception évidentes.
+    Évite les changements basés uniquement sur des préférences personnelles.
+    Ne modifie pas le fonctionnement du code sans raison valable.
+    Si une modification importante est nécessaire, explique brièvement pourquoi.
 
-Retourne directement la version finale du code, propre et prête à être utilisée.
+    Retourne directement la version finale du code, propre et cohérente.
+
+Nettoyage :
+    Nettoie ce code sans modifier son fonctionnement ni ses fonctionnalités.
+
+    Supprime le code inutile, mort, redondant ou obsolète.
+    Supprime les imports, variables, fonctions et abstractions inutilisés.
+    Réduis la duplication et les répétitions.
+    Simplifie les conditions et la logique lorsque c’est pertinent.
+    Supprime les commentaires inutiles ou obsolètes.
+    Corrige les incohérences évidentes.
+    Garde uniquement ce qui est réellement nécessaire au fonctionnement du code.
+    Ne crée pas de nouvelles abstractions sans nécessité.
+    Ne modifie pas l’API ou le comportement existant.
+    Ne supprime aucune fonctionnalité.
+    Si un élément semble inutile mais que son utilité ne peut pas être confirmée, conserve-le et signale-le brièvement.
+
+    Retourne directement la version finale du code, nettoyée et prête à être utilisée.
+
+All :
+    Analyse, optimise et nettoie ce code sans modifier son fonctionnement ni ses fonctionnalités.
+
+    Respecte les conventions du langage/framework utilisé et uniformise la syntaxe, le nommage et la structure du code.
+    Optimise les variables, fonctions, classes, composants, types, paramètres et retours lorsque cela améliore réellement la cohérence.
+    Supprime les imports, variables, fonctions, abstractions et commentaires inutilisés, morts, redondants ou obsolètes.
+    Réduis la duplication et simplifie les conditions ou la logique lorsque cela ne change pas le comportement.
+    Privilégie une syntaxe compacte et lisible : mets les blocs simples sur une seule ligne lorsque c’est pertinent, par exemple `if (...) { return; }`, avec des espaces cohérents dans `{ ... }`.
+    Utilise plusieurs lignes uniquement lorsque cela est réellement nécessaire pour la lisibilité ou les conventions du langage.
+    Corrige les incohérences évidentes de syntaxe, de structure et de formatage.
+    Ne crée pas de nouvelles abstractions sans nécessité et n’applique pas de changements basés uniquement sur des préférences personnelles.
+    Ne modifie pas l’API, le comportement ou la logique existante et ne supprime aucune fonctionnalité.
+    Si l’utilité d’un élément ne peut pas être confirmée, conserve-le plutôt que de risquer de modifier le fonctionnement.
+
+    Retourne directement la version finale du code, propre, optimisée, cohérente, compacte et prête à être utilisée.

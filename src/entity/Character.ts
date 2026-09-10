@@ -13,14 +13,14 @@ export default class Player {
 
     public level: number;
     public experience: number;
-
     public health: number;
     public maxHealth: number;
-
     public strength: number;
     public agility: number;
     public intelligence: number;
     public defense: number;
+
+    public attributePoints: number;
 
     constructor(
         public readonly id: string,
@@ -34,27 +34,26 @@ export default class Player {
         agility?: number,
         intelligence?: number,
         defense?: number,
+        attributePoints = 0,
     ) {
+        const stats = this.getClassStats();
+
         this.level = level;
         this.experience = experience;
-
         this.health = health;
         this.maxHealth = maxHealth;
+        this.attributePoints = attributePoints;
 
-        const classStats = this.getClassStats();
-
-        this.strength = strength ?? classStats.strength;
-        this.agility = agility ?? classStats.agility;
-        this.intelligence = intelligence ?? classStats.intelligence;
-        this.defense = defense ?? classStats.defense;
+        this.strength = strength ?? stats.strength;
+        this.agility = agility ?? stats.agility;
+        this.intelligence = intelligence ?? stats.intelligence;
+        this.defense = defense ?? stats.defense;
 
         this.logger.debug(`Player ${id} initialized.`);
     }
 
     public addExperience(amount: number): void {
-        if (amount <= 0) {
-            return;
-        }
+        if (amount <= 0) { return; }
 
         this.experience += amount;
 
@@ -69,23 +68,15 @@ export default class Player {
     }
 
     public attack(): number {
-        const damage = Math.max(
-            1,
-            this.strength + Math.floor(Math.random() * 6) - 2,
-        );
+        const damage = Math.max(1, this.strength + Math.floor(Math.random() * 6) - 2);
 
-        this.logger.debug(
-            `Player ${this.id} attacks for ${damage} damage.`,
-        );
+        this.logger.debug(`Player ${this.id} attacks for ${damage} damage.`);
 
         return damage;
     }
 
     public takeDamage(damage: number): void {
-        const reducedDamage = Math.max(
-            1,
-            damage - Math.floor(this.defense / 2),
-        );
+        const reducedDamage = Math.max(1, damage - Math.floor(this.defense / 2));
 
         this.health = Math.max(0, this.health - reducedDamage);
 
@@ -107,7 +98,6 @@ export default class Player {
                     intelligence: 3,
                     defense: 10,
                 });
-
             case Class.Explorer:
                 return this.generateStats({
                     strength: 6,
@@ -115,7 +105,6 @@ export default class Player {
                     intelligence: 6,
                     defense: 5,
                 });
-
             case Class.Mage:
                 return this.generateStats({
                     strength: 3,
@@ -123,7 +112,6 @@ export default class Player {
                     intelligence: 12,
                     defense: 4,
                 });
-
             default:
                 throw new Error(`Unknown player class: ${this.className}`);
         }
@@ -139,26 +127,36 @@ export default class Player {
     }
 
     private randomize(value: number): number {
-        const minFactor = 0.8;
-        const maxFactor = 1.2;
-        const factor = minFactor + Math.random() * (maxFactor - minFactor);
+        const factor = 0.8 + Math.random() * 0.4;
 
         return Math.max(1, Math.round(value * factor));
     }
 
     private levelUp(): void {
         this.level++;
-
         this.maxHealth += 10;
         this.health = this.maxHealth;
-
         this.strength++;
         this.agility++;
         this.intelligence++;
         this.defense++;
+        this.attributePoints++;
 
-        this.logger.info(
-            `Player ${this.id} reached level ${this.level}.`,
-        );
+        this.logger.info(`Player ${this.id} reached level ${this.level}.`);
+    }
+
+    public getAttributePoints(): number {
+        return this.attributePoints;
+    }
+
+    public levelUpSkill(
+        skill: "strength" | "agility" | "intelligence" | "defense",
+    ): void {
+        if (this.attributePoints <= 0) {
+            throw new Error("No attribute points available.");
+        }
+
+        this[skill]++;
+        this.attributePoints--;
     }
 }

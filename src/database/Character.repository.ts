@@ -14,25 +14,21 @@ interface StatsRecord {
     Health: number;
     MaxHealth: number;
     Strength: number;
+    AttributePoints: number;
     Agility: number;
     Intelligence: number;
     Defense: number;
 }
 
 export default class PlayerDatabase {
-    private readonly logger = new Logger({
-        context: "PlayerDatabase",
-    });
-
+    private readonly logger = new Logger({ context: "PlayerDatabase" });
     private readonly database: Database.Database;
 
     constructor() {
         this.database = new Database("./data/player.db");
-
         this.database.pragma("foreign_keys = ON");
         this.createTables();
         this.migrateStats();
-
         this.logger.info("Player database initialized successfully.");
     }
 
@@ -43,7 +39,6 @@ export default class PlayerDatabase {
         });
 
         transaction();
-
         this.logger.debug(`Player ${player.Identifier} saved.`);
     }
 
@@ -63,6 +58,7 @@ export default class PlayerDatabase {
             Health: stats?.Health ?? 100,
             MaxHealth: stats?.MaxHealth ?? 100,
             Strength: stats?.Strength ?? 0,
+            AttributePoints: stats?.AttributePoints ?? 0,
             Agility: stats?.Agility ?? 0,
             Intelligence: stats?.Intelligence ?? 0,
             Defense: stats?.Defense ?? 0,
@@ -90,18 +86,15 @@ export default class PlayerDatabase {
 
             CREATE TABLE IF NOT EXISTS Stats (
                 Identifier TEXT NOT NULL UNIQUE,
-
                 Level INTEGER NOT NULL DEFAULT 1,
                 Experience INTEGER NOT NULL DEFAULT 0,
-
                 Health INTEGER NOT NULL DEFAULT 100,
                 MaxHealth INTEGER NOT NULL DEFAULT 100,
-
                 Strength INTEGER NOT NULL DEFAULT 0,
                 Agility INTEGER NOT NULL DEFAULT 0,
                 Intelligence INTEGER NOT NULL DEFAULT 0,
                 Defense INTEGER NOT NULL DEFAULT 0,
-
+                AttributePoints INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (Identifier)
                     REFERENCES Player(Identifier)
                     ON DELETE CASCADE
@@ -111,28 +104,21 @@ export default class PlayerDatabase {
 
     private migrateStats(): void {
         const columns = this.database
-            .prepare(`PRAGMA table_info(Stats)`)
+            .prepare("PRAGMA table_info(Stats)")
             .all() as { name: string }[];
 
-        const existingColumns = new Set(
-            columns.map(({ name }) => name),
-        );
+        const existingColumns = new Set(columns.map(({ name }) => name));
 
         const migrations: Record<string, string> = {
-            Strength:
-                "ALTER TABLE Stats ADD COLUMN Strength INTEGER NOT NULL DEFAULT 0",
-            Agility:
-                "ALTER TABLE Stats ADD COLUMN Agility INTEGER NOT NULL DEFAULT 0",
-            Intelligence:
-                "ALTER TABLE Stats ADD COLUMN Intelligence INTEGER NOT NULL DEFAULT 0",
-            Defense:
-                "ALTER TABLE Stats ADD COLUMN Defense INTEGER NOT NULL DEFAULT 0",
+            Strength: "ALTER TABLE Stats ADD COLUMN Strength INTEGER NOT NULL DEFAULT 0",
+            Agility: "ALTER TABLE Stats ADD COLUMN Agility INTEGER NOT NULL DEFAULT 0",
+            Intelligence: "ALTER TABLE Stats ADD COLUMN Intelligence INTEGER NOT NULL DEFAULT 0",
+            Defense: "ALTER TABLE Stats ADD COLUMN Defense INTEGER NOT NULL DEFAULT 0",
+            AttributePoints: "ALTER TABLE Stats ADD COLUMN AttributePoints INTEGER NOT NULL DEFAULT 0",
         };
 
         for (const [column, query] of Object.entries(migrations)) {
-            if (existingColumns.has(column)) {
-                continue;
-            }
+            if (existingColumns.has(column)) { continue; }
 
             this.database.exec(query);
             this.logger.debug(`Added Stats.${column} column.`);
@@ -153,11 +139,7 @@ export default class PlayerDatabase {
                     Name = excluded.Name,
                     Class = excluded.Class;
             `)
-            .run(
-                player.Name,
-                player.Identifier,
-                player.Class,
-            );
+            .run(player.Name, player.Identifier, player.Class);
     }
 
     private saveStats(player: Player): void {
@@ -172,9 +154,10 @@ export default class PlayerDatabase {
                     Strength,
                     Agility,
                     Intelligence,
-                    Defense
+                    Defense,
+                    AttributePoints
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
                     Level = excluded.Level,
@@ -184,7 +167,8 @@ export default class PlayerDatabase {
                     Strength = excluded.Strength,
                     Agility = excluded.Agility,
                     Intelligence = excluded.Intelligence,
-                    Defense = excluded.Defense;
+                    Defense = excluded.Defense,
+                    AttributePoints = excluded.AttributePoints;
             `)
             .run(
                 player.Identifier,
@@ -196,6 +180,7 @@ export default class PlayerDatabase {
                 player.Agility,
                 player.Intelligence,
                 player.Defense,
+                player.AttributePoints,
             );
     }
 
@@ -223,7 +208,8 @@ export default class PlayerDatabase {
                     Strength,
                     Agility,
                     Intelligence,
-                    Defense
+                    Defense,
+                    AttributePoints
                 FROM Stats
                 WHERE Identifier = ?
             `)

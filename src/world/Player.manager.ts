@@ -1,4 +1,4 @@
-import Player from "../player/Character.js";
+import Player from "../entity/Character.js";
 import PlayerDatabase from "../database/Character.repository.js";
 import { Class } from "../../enums/Player.Class.js";
 import { Logger } from "../utils/Logger.js";
@@ -8,15 +8,14 @@ export default class PlayerManager {
     private readonly players = new Map<string, Player>();
     private readonly timers = new Map<string, NodeJS.Timeout>();
     private readonly database = new PlayerDatabase();
-
     private readonly inactivityTime = 15 * 60 * 1000;
 
     public get(id: string): Player | undefined {
-        const cachedPlayer = this.players.get(id);
+        const player = this.players.get(id);
 
-        if (cachedPlayer) {
+        if (player) {
             this.resetUnloadTimer(id);
-            return cachedPlayer;
+            return player;
         }
 
         const data = this.database.get(id);
@@ -25,18 +24,13 @@ export default class PlayerManager {
             return undefined;
         }
 
-        const player = new Player(
-            data.Identifier,
-            data.Name,
-            data.Class,
-        );
+        const loadedPlayer = new Player(data.Identifier, data.Name, data.Class);
 
-        this.players.set(id, player);
+        this.players.set(id, loadedPlayer);
         this.resetUnloadTimer(id);
-
         this.logger.debug(`Player ${id} loaded from database.`);
 
-        return player;
+        return loadedPlayer;
     }
 
     public create(id: string, name: string, playerClass: Class): Player {
@@ -49,10 +43,7 @@ export default class PlayerManager {
         this.savePlayer(player);
         this.players.set(id, player);
         this.resetUnloadTimer(id);
-
-        this.logger.debug(
-            `Player ${id} created with class ${playerClass}.`,
-        );
+        this.logger.debug(`Player ${id} created with class ${playerClass}.`);
 
         return player;
     }
@@ -67,7 +58,6 @@ export default class PlayerManager {
         this.savePlayer(player);
         this.clearUnloadTimer(id);
         this.players.delete(id);
-
         this.logger.debug(`Player ${id} unloaded from memory.`);
     }
 
@@ -82,12 +72,9 @@ export default class PlayerManager {
     private resetUnloadTimer(id: string): void {
         this.clearUnloadTimer(id);
 
-        const timer = setTimeout(() => {
-            this.remove(id);
-        }, this.inactivityTime);
+        const timer = setTimeout(() => this.remove(id), this.inactivityTime);
 
         timer.unref();
-
         this.timers.set(id, timer);
     }
 
@@ -115,6 +102,7 @@ export default class PlayerManager {
             Agility: player.agility,
             Intelligence: player.intelligence,
             Defense: player.defense,
+            AttributePoints: player.attributePoints,
         });
     }
 }

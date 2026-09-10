@@ -1,23 +1,26 @@
-import Player from "../player/Character.js";
+import Player from "../entity/Character.js";
 import { Logger } from "../utils/Logger.js";
 import Enemy from "./Enemy.js";
 
 export default class Combat {
+    public readonly logger = new Logger({ context: "Combat" });
+
     constructor(
         public readonly player: Player,
         public readonly enemy: Enemy,
     ) {}
-    public readonly logger = new Logger({ context: "Combat" });
-    
+
     public attack() {
-        const playerDamage = this.enemy.takeDamage(
-            this.getPlayerDamage(),
+        const playerDamage = this.enemy.takeDamage(this.getPlayerDamage());
+
+        this.logger.info(
+            `Player deals ${playerDamage} damage to enemy ${this.enemy.name}.`,
         );
-        this.logger.info(`Player deals ${playerDamage} damage to enemy ${this.enemy.name}.`);
 
         if (!this.enemy.isAlive()) {
             this.player.addExperience(this.enemy.experience);
             this.logger.info(`Player gains ${this.enemy.experience} experience.`);
+
             return {
                 playerDamage,
                 enemyDamage: 0,
@@ -33,6 +36,7 @@ export default class Combat {
         );
 
         this.player.takeDamage(enemyDamage);
+
         return {
             playerDamage,
             enemyDamage,

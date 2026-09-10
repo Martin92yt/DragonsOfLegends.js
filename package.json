@@ -15,7 +15,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "sandbox": "tsx ../sandbox/index.ts"
+    "sandbox": "tsx ../sandbox/nodiscord.ts",
+    "discord": "tsx ../sandbox/index.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3"
