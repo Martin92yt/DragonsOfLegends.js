@@ -1,4 +1,7 @@
-export interface EnemyStats {
+import { EnemyType } from "./enemy.type.js";
+
+export interface EnemyData {
+    type: EnemyType;
     name: string;
     health: number;
     maxHealth: number;
@@ -9,6 +12,7 @@ export interface EnemyStats {
 
 export default class Enemy {
     constructor(
+        public readonly type: EnemyType,
         public readonly name: string,
         public health: number,
         public readonly maxHealth: number,
@@ -18,13 +22,12 @@ export default class Enemy {
     ) {}
 
     public takeDamage(damage: number): number {
-        const damageDealt = Math.max(1, damage - this.defense);
-        this.health = Math.max(0, this.health - damageDealt);
-        return damageDealt;
+        const finalDamage = Math.max(1, damage - Math.floor(this.defense / 2));
+        this.health = Math.max(0, this.health - finalDamage);
+        return finalDamage;
     }
 
-    public heal(amount: number): void { this.health = Math.min(this.maxHealth, this.health + amount); }
-    public resetHealth(): void { this.health = this.maxHealth; }
     public isAlive(): boolean { return this.health > 0; }
-    public get healthPercentage(): number { return Math.round((this.health / this.maxHealth) * 100); }
+    public heal(amount: number): void { this.health = Math.min(this.maxHealth, this.health + amount); }
+    public get healthRatio(): number { return this.health / this.maxHealth; }
 }

@@ -1,5 +1,4 @@
 .env
-.idea/
 .git/
 node_modules/
 data/*

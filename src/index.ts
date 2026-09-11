@@ -1,12 +1,11 @@
-import ExplorationManager from "./world/Exploration.manager.ts";
-import locationManager from "./world/Location.manger.ts";
-import { LocationType } from "../enums/Location.Type.ts";
-import { PlayerClass } from "../enums/Player.Class.ts";
-import PlayerManager from "./world/Player.manager.ts";
-import CombatManager from "./world/Combat.manager.ts";
-import { EnemyType } from "../enums/Enemy.Type.ts";
-import { Logger } from "./utils/Logger.ts";
-import OfficialMap from "../worlds/OfficialMap.ts"
+import LocationManager from "./location/location.manager.js";
+import { LocationType } from "./location/location.type.js";
+import PlayerManager from "./player/player.manager.js";
+import CombatManager from "./combat/combat.manager.js";
+import { PlayerClass } from "./player/player.class.js";
+import OfficialMap from "./location/official-map.js";
+import { EnemyType } from "./enemy/enemy.type.js";
+import { Logger } from "./utils/logger.js";
 
 const logger = new Logger({ context: "Packages" });
 logger.info("🐉 Welcome to DragonsOfLegends.js!");
@@ -17,13 +16,15 @@ logger.warn("This module is currently under development and may be unstable.");
 logger.blank();
 
 interface Settings { useWorld: boolean; }
-export default class World {
 
+export default class World {
     public readonly players = new PlayerManager(this);
     public readonly combat = new CombatManager();
-    public readonly exploration = new ExplorationManager();
-    public readonly location = new locationManager();
-    constructor(options: Settings = { useWorld: false }) { if (options.useWorld) new OfficialMap(this) }
+    public readonly location = new LocationManager();
+
+    constructor(options: Settings = { useWorld: false }) {
+        if (options.useWorld) new OfficialMap(this);
+    }
 }
 
 export { PlayerClass, EnemyType, LocationType };

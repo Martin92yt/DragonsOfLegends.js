@@ -1,9 +1,9 @@
 import Database from "better-sqlite3";
-import { Player } from "../../interfaces/Player.interface.js";
-import { Logger } from "../utils/Logger.js";
+import { PlayerData } from "./player.interface.js";
+import { Logger } from "../utils/logger.js";
 
-interface PlayerRecord { Name: string; Identifier: string; Class: Player["Class"]; LocationId: string; }
-interface StatsRecord { Level: number; Experience: number; Health: number; MaxHealth: number; Strength: number; AttributePoints: number; Agility: number; Intelligence: number; Defense: number; }
+interface PlayerRecord { id: string; name: string; classId: PlayerData["classId"]; locationId: string; }
+interface StatsRecord { level: number; experience: number; health: number; maxHealth: number; strength: number; agility: number; intelligence: number; defense: number; attributePoints: number; }
 
 export default class PlayerDatabase {
     #logger = new Logger({ context: "PlayerDatabase" });
@@ -17,66 +17,55 @@ export default class PlayerDatabase {
         this.#logger.info("Player database initialized successfully.");
     }
 
-    public save(player: Player): void {
+    public save(player: PlayerData): void {
         const transaction = this.database.transaction(() => {
             this.savePlayer(player);
             this.saveStats(player);
         });
-
         transaction();
-        this.#logger.debug(`Player ${player.Identifier} saved.`);
+        this.#logger.debug(`Player ${player.id} saved.`);
     }
 
-    public get(identifier: string): Player | undefined {
+    public get(identifier: string): PlayerData | undefined {
         const player = this.findPlayer(identifier);
-
         if (!player) return undefined;
-    
-        const stats = this.findStats(identifier);
 
+        const stats = this.findStats(identifier);
         return {
-            ...player,
-            Level: stats?.Level ?? 1,
-            Experience: stats?.Experience ?? 0,
-            Health: stats?.Health ?? 100,
-            MaxHealth: stats?.MaxHealth ?? 100,
-            Strength: stats?.Strength ?? 0,
-            AttributePoints: stats?.AttributePoints ?? 0,
-            Agility: stats?.Agility ?? 0,
-            Intelligence: stats?.Intelligence ?? 0,
-            Defense: stats?.Defense ?? 0,
+            id: player.id,
+            name: player.name,
+            classId: player.classId,
+            locationId: player.locationId,
+            level: stats?.level ?? 1,
+            experience: stats?.experience ?? 0,
+            health: stats?.health ?? 100,
+            maxHealth: stats?.maxHealth ?? 100,
+            strength: stats?.strength ?? 0,
+            agility: stats?.agility ?? 0,
+            intelligence: stats?.intelligence ?? 0,
+            defense: stats?.defense ?? 0,
+            attributePoints: stats?.attributePoints ?? 0,
         };
     }
 
     public delete(identifier: string): boolean {
         const transaction = this.database.transaction(() => {
-            this.database
-                .prepare(`DELETE FROM Stats WHERE Identifier = ?`)
-                .run(identifier);
-
-            const result = this.database
-                .prepare(`DELETE FROM Player WHERE Identifier = ?`)
-                .run(identifier);
-
+            this.database.prepare(`DELETE FROM Stats WHERE Identifier = ?`).run(identifier);
+            const result = this.database.prepare(`DELETE FROM Player WHERE Identifier = ?`).run(identifier);
             return result.changes > 0;
         });
 
         const isDeleted = transaction();
-        if (isDeleted) {
-            this.#logger.debug(`Player ${identifier} deleted from database.`);
-        }
-
+        if (isDeleted) this.#logger.debug(`Player ${identifier} deleted from database.`);
         return isDeleted;
     }
 
     public count(): number {
-        // Correction : "Player" au singulier
         const result = this.database.prepare(`SELECT COUNT(*) as count FROM Player`).get() as { count: number };
         return result.count;
     }
 
     private createTables(): void {
-        // Correction : "Player" au singulier
         this.database.exec(`
             CREATE TABLE IF NOT EXISTS Player (
                 Name TEXT NOT NULL, 
@@ -95,9 +84,7 @@ export default class PlayerDatabase {
                 Intelligence INTEGER NOT NULL DEFAULT 0,
                 Defense INTEGER NOT NULL DEFAULT 0,
                 AttributePoints INTEGER NOT NULL DEFAULT 0,
-                FOREIGN KEY (Identifier)
-                    REFERENCES Player(Identifier)
-                    ON DELETE CASCADE
+                FOREIGN KEY (Identifier) REFERENCES Player(Identifier) ON DELETE CASCADE
             );
         `);
     }
@@ -115,15 +102,13 @@ export default class PlayerDatabase {
         };
 
         for (const [column, query] of Object.entries(migrations)) {
-            if (existingColumns.has(column)) { continue; }
-
+            if (existingColumns.has(column)) continue;
             this.database.exec(query);
             this.#logger.debug(`Added Stats.${column} column.`);
         }
     }
 
-    private savePlayer(player: Player): void {
-        // Correction : suppression du point-virgule dans DO UPDATE SET
+    private savePlayer(player: PlayerData): void {
         this.database
             .prepare(`
                 INSERT INTO Player (Name, Identifier, Class, LocationId)
@@ -132,26 +117,15 @@ export default class PlayerDatabase {
                 DO UPDATE SET
                     Name = excluded.Name,
                     Class = excluded.Class,
-                    LocationId = excluded.LocationId;
+                    LocationId = excluded.LocationId
             `)
-            .run(player.Name, player.Identifier, player.Class, player.LocationId);
+            .run(player.name, player.id, player.classId, player.locationId);
     }
 
-    private saveStats(player: Player): void {
+    private saveStats(player: PlayerData): void {
         this.database
             .prepare(`
-                INSERT INTO Stats (
-                    Identifier,
-                    Level,
-                    Experience,
-                    Health,
-                    MaxHealth,
-                    Strength,
-                    Agility,
-                    Intelligence,
-                    Defense,
-                    AttributePoints
-                )
+                INSERT INTO Stats (Identifier, Level, Experience, Health, MaxHealth, Strength, Agility, Intelligence, Defense, AttributePoints)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
@@ -163,27 +137,31 @@ export default class PlayerDatabase {
                     Agility = excluded.Agility,
                     Intelligence = excluded.Intelligence,
                     Defense = excluded.Defense,
-                    AttributePoints = excluded.AttributePoints;
+                    AttributePoints = excluded.AttributePoints
             `)
             .run(
-                player.Identifier,
-                player.Level,
-                player.Experience,
-                player.Health,
-                player.MaxHealth,
-                player.Strength,
-                player.Agility,
-                player.Intelligence,
-                player.Defense,
-                player.AttributePoints,
+                player.id,
+                player.level,
+                player.experience,
+                player.health,
+                player.maxHealth,
+                player.strength,
+                player.agility,
+                player.intelligence,
+                player.defense,
+                player.attributePoints,
             );
     }
 
-    private findPlayer(identifier: string): PlayerRecord | undefined { 
-        return this.database.prepare(`SELECT Name, Identifier, Class, LocationId FROM Player WHERE Identifier = ?`).get(identifier) as PlayerRecord | undefined; 
+    private findPlayer(identifier: string): PlayerRecord | undefined {
+        return this.database
+            .prepare(`SELECT Name as name, Identifier as id, Class as classId, LocationId as locationId FROM Player WHERE Identifier = ?`)
+            .get(identifier) as PlayerRecord | undefined;
     }
 
-    private findStats(identifier: string): StatsRecord | undefined { 
-        return this.database.prepare(`SELECT Level, Experience, Health, MaxHealth, Strength, Agility, Intelligence, Defense, AttributePoints FROM Stats WHERE Identifier = ?`).get(identifier) as StatsRecord | undefined; 
+    private findStats(identifier: string): StatsRecord | undefined {
+        return this.database
+            .prepare(`SELECT Level as level, Experience as experience, Health as health, MaxHealth as maxHealth, Strength as strength, Agility as agility, Intelligence as intelligence, Defense as defense, AttributePoints as attributePoints FROM Stats WHERE Identifier = ?`)
+            .get(identifier) as StatsRecord | undefined;
     }
 }
