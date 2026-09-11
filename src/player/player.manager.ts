@@ -1,5 +1,6 @@
 import { CreatePlayerOptions, PlayerCount, PlayerData } from "./player.interface.js";
 import PlayerDatabase from "./player.repository.js";
+import InventoryDatabase from "../inventory/inventory.repository.js";
 import Player from "./player.entity.js";
 import { Logger } from "../utils/logger.js";
 import World from "../index.js";
@@ -12,6 +13,7 @@ export default class PlayerManager {
     private readonly players = new Map<string, Player>();
     private readonly unloadTimers = new Map<string, NodeJS.Timeout>();
     private readonly database = new PlayerDatabase();
+    private readonly inventoryDb = new InventoryDatabase();
 
     constructor(rpg: World) { 
         this.#rpg = rpg; 
@@ -50,9 +52,15 @@ export default class PlayerManager {
             data.attributePoints,
         );
 
+        // Chargement de l'inventaire depuis la BDD d'inventaire
+        const savedItems = this.inventoryDb.getPlayerInventory(id);
+        if (loadedPlayer.inventory && typeof loadedPlayer.inventory.load === "function") {
+            loadedPlayer.inventory.load(savedItems);
+        }
+
         this.players.set(id, loadedPlayer);
         this.refreshUnloadTimer(id);
-        this.#logger.debug(`Player ${id} loaded from database.`);
+        this.#logger.debug(`Player ${id} loaded with inventory.`);
 
         return loadedPlayer;
     }
@@ -77,6 +85,7 @@ export default class PlayerManager {
     public delete(id: string): boolean {
         this.clearUnloadTimer(id);
         this.players.delete(id);
+        this.inventoryDb.clearInventory(id);
         const dbDeleted = this.database.delete(id);
         this.#logger.debug(`Player ${id} permanently deleted.`);
         return dbDeleted;
@@ -129,7 +138,12 @@ export default class PlayerManager {
             defense: player.attributes.defense,
             attributePoints: player.attributes.points,
         };
+        
+        // Sauvegarde des stats et de l'inventaire
         this.database.save(data);
+        if (player.inventory && typeof player.inventory.getItems === "function") {
+            this.inventoryDb.savePlayerInventory(player.id, player.inventory.getItems());
+        }
     }
 
     public has(id: string): boolean { return this.exist(id); }

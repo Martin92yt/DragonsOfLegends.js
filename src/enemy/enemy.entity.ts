@@ -10,7 +10,7 @@ export interface EnemyData {
     experience: number;
 }
 
-export default class Enemy {
+export default class EnemyEntity {
     constructor(
         public readonly type: EnemyType,
         public readonly name: string,

@@ -2,6 +2,7 @@ import { PlayerClass } from "./player.class.js";
 import { Logger } from "../utils/logger.js";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, GainExperienceResult, PlayerSnapshot } from "./player.interface.js";
 import { ExplorationResult } from "../location/location.interface.js";
+import { InventoryEntity } from "../inventory/inventory.entity.js";
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
@@ -16,6 +17,7 @@ export default class Player {
     public experience: PlayerExperience;
     public health: PlayerHealth;
     public attributes: PlayerAttributes;
+    public readonly inventory: InventoryEntity;
     public isTravelling = false;
 
     constructor(
@@ -37,6 +39,10 @@ export default class Player {
             intelligence: intelligence ?? baseStats.intelligence,
             defense: defense ?? baseStats.defense,
         };
+        
+        // Instanciation de l'inventaire dédié au joueur
+        this.inventory = new InventoryEntity(this.id);
+        
         this.logger.debug(`Player ${this.id} initialized.`);
     }
 
@@ -48,11 +54,10 @@ export default class Player {
         
         const travelTimeMs = Math.floor(Math.random() * 4001) + 1000;
         await new Promise((resolve) => setTimeout(resolve, travelTimeMs));
-        this.isTravelling = false; // On libère l'état de voyage
+        this.isTravelling = false;
 
         if (Math.random() < 0.30) {
             this.logger.debug(`Player ${this.id} was attacked on the road.`);
-            // On cast en "any" temporairement pour satisfaire l'interface le temps que la logique de spawn soit câblée
             const enemy = { name: "Gobelin", level: this.level } as any; 
             return { arrived: false, attacked: true, travelTimeMs, locationId: this.location, enemy };
         }
