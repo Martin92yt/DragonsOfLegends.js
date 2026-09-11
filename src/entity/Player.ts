@@ -2,48 +2,8 @@ import { PlayerClass } from "../../enums/Player.Class.js";
 import { Logger } from "../utils/Logger.js";
 
 type Attribute = "strength" | "agility" | "intelligence" | "defense";
-
-interface ClassStats {
-    strength: number;
-    agility: number;
-    intelligence: number;
-    defense: number;
-}
-
-interface PlayerHealth {
-    current: number;
-    max: number;
-}
-
-interface PlayerExperience {
-    current: number;
-    required: number;
-}
-
-interface PlayerAttributes {
-    points: number;
-    strength: number;
-    agility: number;
-    intelligence: number;
-    defense: number;
-}
-
-export interface GainExperienceResult {
-    amount: number;
-    total: number;
-    leveledUp: boolean;
-    level: number;
-}
-
-export interface PlayerSnapshot {
-    id: string;
-    name: string;
-    classId: PlayerClass;
-    level: number;
-    experience: PlayerExperience;
-    health: PlayerHealth;
-    attributes: PlayerAttributes;
-}
+import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, GainExperienceResult, PlayerSnapshot } from "../../interfaces/Player.interface.js";
+import { ExplorationResult } from "../../interfaces/Location.interface.js";
 
 export default class Player {
     private static readonly BASE_HEALTH = 100;
@@ -61,6 +21,7 @@ export default class Player {
         public readonly id: string,
         public name: string,
         public readonly classId: PlayerClass,
+        public location: string,
         level = 1,
         experience = 0,
         health = Player.BASE_HEALTH,
@@ -76,7 +37,7 @@ export default class Player {
         const stats = this.getClassStats();
 
         this.level = Math.max(1, level);
-
+        this.location = location;
         this.experience = {
             current: Math.max(0, experience),
             required: this.level * Player.EXPERIENCE_PER_LEVEL,
@@ -96,6 +57,40 @@ export default class Player {
         };
 
         this.#logger.debug(`Player ${this.id} initialized.`);
+    }
+
+    public async moveTo(destinationId: string): Promise<ExplorationResult> {
+        this.#logger.debug(`Player ${this.id} is travelling towards ${destinationId}...`);
+
+        const travelTimeMs = Math.floor(Math.random() * (5000 - 1000 + 1)) + 1000;
+        await new Promise((resolve) => setTimeout(resolve, travelTimeMs));
+
+        const attacked = Math.random() < 0.30;
+
+        if (attacked) {
+            this.#logger.debug(`Player ${this.id} was attacked on the road.`);
+            
+            // Instancie ou récupère l'ennemi ici selon ta logique de jeu
+            const enemy = { name: "Gobelin", level: this.level }; 
+
+            return {
+                arrived: false,
+                attacked: true,
+                enemy,
+                travelTimeMs,
+                locationId: this.location, // Le joueur reste sur sa zone d'origine
+            };
+        }
+
+        this.location = destinationId;
+        this.#logger.debug(`Player ${this.id} arrived at ${destinationId}.`);
+
+        return {
+            arrived: true,
+            attacked: false,
+            travelTimeMs,
+            locationId: this.location,
+        };
     }
 
     public gainExperience(amount: number): GainExperienceResult {
@@ -184,6 +179,7 @@ export default class Player {
             name: this.name,
             classId: this.classId,
             level: this.level,
+            locationId: this.location,
             experience: {
                 current: this.experience.current,
                 required: this.experience.required,

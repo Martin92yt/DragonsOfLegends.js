@@ -1,38 +1,14 @@
-import Enemy from "../entity/Enemy.js";
 import { EnemyType } from "../../enums/Enemy.Type.js";
-import Player from "../entity/Character.js";
+import Player from "../entity/Player.js";
+import Enemy from "../entity/Enemy.js";
 
-type EnemyStats = {
-    name: string;
-    health: number;
-    strength: number;
-    defense: number;
-    experience: number;
-};
+type EnemyStats = { name: string; health: number; strength: number; defense: number; experience: number; };
 
 export default class EnemyManager {
     private readonly enemies: Record<EnemyType, EnemyStats> = {
-        [EnemyType.Goblin]: {
-            name: "Goblin",
-            health: 50,
-            strength: 6,
-            defense: 2,
-            experience: 25,
-        },
-        [EnemyType.Wolf]: {
-            name: "Wolf",
-            health: 40,
-            strength: 8,
-            defense: 2,
-            experience: 30,
-        },
-        [EnemyType.Skeleton]: {
-            name: "Skeleton",
-            health: 60,
-            strength: 7,
-            defense: 5,
-            experience: 40,
-        },
+        [EnemyType.Goblin]: { name: "Goblin", health: 50, strength: 6, defense: 2, experience: 25 },
+        [EnemyType.Wolf]: { name: "Wolf", health: 40, strength: 8, defense: 2, experience: 30 },
+        [EnemyType.Skeleton]: { name: "Skeleton", health: 60, strength: 7, defense: 5, experience: 40 },
     };
 
     public create(player: Player): Enemy {
@@ -43,14 +19,6 @@ export default class EnemyManager {
         const random = (value: number) => Math.max(1, Math.round(value * scale * (0.85 + Math.random() * 0.3)));
         const health = random(base.health);
 
-        return new Enemy(
-            type,
-            base.name,
-            health,
-            health,
-            random(base.strength),
-            random(base.defense),
-            Math.round(base.experience * scale),
-        );
+        return new Enemy(type, base.name, health, health, random(base.strength), random(base.defense), Math.round(base.experience * scale));
     }
 }
