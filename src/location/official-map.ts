@@ -10,49 +10,125 @@ export default class OfficialMap {
         this.create();
     }
 
-    private add(id: string, type: LocationType, options: { flags?: LocationFlags; land?: string[]; boat?: string[] } = {}): void {
-        this.rpg.location.create({
-            id,
-            type,
-            flags: options.flags ?? LocationFlags.None,
-            connections: { land: options.land ?? [], boat: options.boat ?? [] }
-        });
-    }
-
     public create(): void {
+        this.rpg.location.bulkCreate([
+            // --- ZONE NORD ---
+            this.rpg.location.add("Embercross").setType(LocationType.City).setFlags(LocationFlags.StarterCity)
+                .linkLand("Twilight Farm")
+                .linkLand("Emerald Ferry"),
 
-        // --- ZONE NORD ---
-        this.add("Embercross", LocationType.City, { flags: LocationFlags.StarterCity, land: ["Twilight Farm", "Emerald Ferry"] });
-        this.add("Twilight Farm", LocationType.City, { flags: LocationFlags.OnWater, land: ["Embercross", "Emerald Ferry"], boat: ["Ironmill"] });
-        this.add("Emerald Ferry", LocationType.Village, { land: ["Embercross", "Twilight Farm", "Ironmill"] });
-        this.add("Ironmill", LocationType.City, { flags: LocationFlags.OnWater, land: ["Emerald Ferry", "Cang"], boat: ["Twilight Farm", "Wintermouth"] });
+            this.rpg.location.add("Twilight Farm").setType(LocationType.City).setFlags(LocationFlags.OnWater)
+                .linkLand("Embercross")
+                .linkLand("Emerald Ferry")
+                .linkBoat("Ironmill"),
 
-        // --- ILE DE L'EST ---
-        this.add("Dawnwind", LocationType.Village, { flags: LocationFlags.TeleportOnly, land: ["Stonefield"] });
-        this.add("Stonefield", LocationType.City, { flags: LocationFlags.TeleportOnly, land: ["Dawnwind"] });
+            this.rpg.location.add("Emerald Ferry").setType(LocationType.Village)
+                .linkLand("Embercross")
+                .linkLand("Twilight Farm")
+                .linkLand("Ironmill"),
 
-        // --- ZONE CENTRE / CÔTE-EST ---
-        this.add("Cang", LocationType.City, { flags: LocationFlags.OnWater, land: ["Ironmill", "Underburg", "Deep Coast"], boat: ["Redtalon", "Wintermouth"] });
-        this.add("Underburg", LocationType.City, { land: ["Cang", "Bright Mill", "Deep Coast"] });
-        this.add("Bright Mill", LocationType.City, { land: ["Underburg", "Dungeon Of The Blind Oracle", "Western Road"] });
-        this.add("Deep Coast", LocationType.City, { flags: LocationFlags.OnWater, land: ["Cang", "Underburg", "Everfire"] });
-        this.add("Everfire", LocationType.Village, { land: ["Deep Coast", "Western Road", "Timberhill", "Redtalon"] });
+            this.rpg.location.add("Ironmill").setType(LocationType.City).setFlags(LocationFlags.OnWater)
+                .linkLand("Emerald Ferry")
+                .linkLand("Cang")
+                .linkBoat("Twilight Farm")
+                .linkBoat("Wintermouth"),
 
-        // --- ZONE OUEST / MONTAGNES ---
-        this.add("Dungeon Of The Blind Oracle", LocationType.Dungeon, { land: ["Bright Mill", "Timeless Den"] });
-        this.add("Timeless Den", LocationType.Dungeon, { land: ["Dungeon Of The Blind Oracle", "Southern Watch"] });
-        this.add("Southern Watch", LocationType.Village, { land: ["Timeless Den", "Western Road", "Summermyst"] });
-        this.add("Western Road", LocationType.City, { land: ["Southern Watch", "Bright Mill", "Everfire", "Timberhill"] });
-        this.add("Summermyst", LocationType.City, { land: ["Southern Watch", "Whiteheart"] });
-        this.add("Whiteheart", LocationType.Village, { land: ["Summermyst", "Timberhill"] });
-        this.add("Timberhill", LocationType.City, { land: ["Whiteheart", "Western Road", "Everfire", "Lightcourt"] });
+            // --- ILE DE L'EST ---
+            this.rpg.location.add("Dawnwind").setType(LocationType.Village).setFlags(LocationFlags.TeleportOnly)
+                .linkLand("Stonefield"),
 
-        // --- ZONE SUD ---
-        this.add("Redtalon", LocationType.Village, { flags: LocationFlags.OnWater, land: ["Everfire", "Wintermouth"], boat: ["Cang"] });
-        this.add("Wintermouth", LocationType.City, { flags: LocationFlags.OnWater, land: ["Redtalon", "Lightcourt", "Skywood"], boat: ["Ironmill", "Cang"] });
-        this.add("Lightcourt", LocationType.City, { land: ["Timberhill", "Wintermouth", "Skywood", "Palace Of Stars"] });
-        this.add("Skywood", LocationType.City, { land: ["Wintermouth", "Lightcourt"] });
-        this.add("Palace Of Stars", LocationType.Dungeon, { land: ["Lightcourt"] });
+            this.rpg.location.add("Stonefield").setType(LocationType.City).setFlags(LocationFlags.TeleportOnly)
+                .linkLand("Dawnwind"),
+
+            // --- ZONE CENTRE / CÔTE-EST ---
+            this.rpg.location.add("Cang").setType(LocationType.City).setFlags(LocationFlags.OnWater)
+                .linkLand("Ironmill")
+                .linkLand("Underburg")
+                .linkLand("Deep Coast")
+                .linkBoat("Redtalon")
+                .linkBoat("Wintermouth"),
+
+            this.rpg.location.add("Underburg").setType(LocationType.City)
+                .linkLand("Cang")
+                .linkLand("Bright Mill")
+                .linkLand("Deep Coast"),
+
+            this.rpg.location.add("Bright Mill").setType(LocationType.City)
+                .linkLand("Underburg")
+                .linkLand("Dungeon Of The Blind Oracle")
+                .linkLand("Western Road"),
+
+            this.rpg.location.add("Deep Coast").setType(LocationType.City).setFlags(LocationFlags.OnWater)
+                .linkLand("Cang")
+                .linkLand("Underburg")
+                .linkLand("Everfire"),
+
+            this.rpg.location.add("Everfire").setType(LocationType.Village)
+                .linkLand("Deep Coast")
+                .linkLand("Western Road")
+                .linkLand("Timberhill")
+                .linkLand("Redtalon"),
+
+            // --- ZONE OUEST / MONTAGNES ---
+            this.rpg.location.add("Dungeon Of The Blind Oracle").setType(LocationType.Dungeon)
+                .linkLand("Bright Mill")
+                .linkLand("Timeless Den"),
+
+            this.rpg.location.add("Timeless Den").setType(LocationType.Dungeon)
+                .linkLand("Dungeon Of The Blind Oracle")
+                .linkLand("Southern Watch"),
+
+            this.rpg.location.add("Southern Watch").setType(LocationType.Village)
+                .linkLand("Timeless Den")
+                .linkLand("Western Road")
+                .linkLand("Summermyst"),
+
+            this.rpg.location.add("Western Road").setType(LocationType.City)
+                .linkLand("Southern Watch")
+                .linkLand("Bright Mill")
+                .linkLand("Everfire")
+                .linkLand("Timberhill"),
+
+            this.rpg.location.add("Summermyst").setType(LocationType.City)
+                .linkLand("Southern Watch")
+                .linkLand("Whiteheart"),
+
+            this.rpg.location.add("Whiteheart").setType(LocationType.Village)
+                .linkLand("Summermyst")
+                .linkLand("Timberhill"),
+
+            this.rpg.location.add("Timberhill").setType(LocationType.City)
+                .linkLand("Whiteheart")
+                .linkLand("Western Road")
+                .linkLand("Everfire")
+                .linkLand("Lightcourt"),
+
+            // --- ZONE SUD ---
+            this.rpg.location.add("Redtalon").setType(LocationType.Village).setFlags(LocationFlags.OnWater)
+                .linkLand("Everfire")
+                .linkLand("Wintermouth")
+                .linkBoat("Cang"),
+
+            this.rpg.location.add("Wintermouth").setType(LocationType.City).setFlags(LocationFlags.OnWater)
+                .linkLand("Redtalon")
+                .linkLand("Lightcourt")
+                .linkLand("Skywood")
+                .linkBoat("Ironmill")
+                .linkBoat("Cang"),
+
+            this.rpg.location.add("Lightcourt").setType(LocationType.City)
+                .linkLand("Timberhill")
+                .linkLand("Wintermouth")
+                .linkLand("Skywood")
+                .linkLand("Palace Of Stars"),
+
+            this.rpg.location.add("Skywood").setType(LocationType.City)
+                .linkLand("Wintermouth")
+                .linkLand("Lightcourt"),
+
+            this.rpg.location.add("Palace Of Stars").setType(LocationType.Dungeon)
+                .linkLand("Lightcourt")
+        ]);
 
         this.rpg.location.validate();
     }

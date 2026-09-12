@@ -16,7 +16,7 @@
   "main": "src/world.ts",
   "scripts": {
     "sandbox": "tsx ../sandbox/nodiscord.ts",
-    "discord": "tsx ../sandbox/index.ts",
+    "discord": "tsx ../sandbox/src/index.ts",
     "example": "tsx ../sandbox/example.ts"
   },
   "dependencies": {

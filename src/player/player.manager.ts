@@ -3,6 +3,8 @@ import PlayerDatabase from "./player.database.js";
 import Player from "./player.entity.js";
 import { Logger } from "../utils/logger.js";
 import World from "../world.js";
+import { PlayerAlreadyExistsError } from "../types/error.js";
+import { InventoryEntity } from "../inventory/inventory.entity.js";
 
 export default class PlayerManager {
     private static readonly INACTIVITY_TIME = 15 * 60 * 1000;
@@ -35,6 +37,7 @@ export default class PlayerManager {
         if (!data) return undefined;
 
         const loadedPlayer = new Player(
+            this.rpg,
             data.id,
             data.name,
             data.classId,
@@ -50,7 +53,6 @@ export default class PlayerManager {
             data.attributePoints,
         );
 
-        // L'inventaire se charge tout seul via l'entité du joueur
         if (loadedPlayer.inventory && typeof loadedPlayer.inventory.load === "function") {
             loadedPlayer.inventory.load();
         }
@@ -64,9 +66,9 @@ export default class PlayerManager {
 
     public create(options: CreatePlayerOptions): Player {
         const { id, name, playerClass } = options;
-        if (this.exist(id)) throw new Error(`Player ${id} already exists.`);
+        if (this.exist(id)) throw new PlayerAlreadyExistsError(id);
 
-        const player = new Player(id, name, playerClass, this.rpg.location.getStartingCityId());
+        const player = new Player(this.rpg, id, name, playerClass, this.rpg.location.getStartingCityId());
         this.players.set(id, player);
         this.save(player);
         this.refreshUnloadTimer(id);
@@ -83,10 +85,9 @@ export default class PlayerManager {
         this.clearUnloadTimer(id);
         this.players.delete(id);
         
-        // Suppression propre de l'inventaire via une instance temporaire ou l'entité
-        const tempPlayer = new Player(id, "", "" as any, "");
-        if (tempPlayer.inventory && typeof (tempPlayer.inventory as any).clear === "function") {
-            (tempPlayer.inventory as any).clear();
+        const inventory = new InventoryEntity(id);
+        if (typeof inventory.clear === "function") {
+            inventory.clear();
         }
 
         const dbDeleted = this.database.delete(id);
@@ -141,10 +142,31 @@ export default class PlayerManager {
             attributePoints: player.attributes.points,
         };
         
-        // Sauvegarde des stats (l'inventaire se sauvegarde déjà tout seul dans InventoryEntity lors des .add() / .remove())
         this.database.save(data);
     }
 
     public has(id: string): boolean { return this.exist(id); }
     public get size(): number { return this.players.size; }
+
+    /**
+     * Sauvegarde tous les joueurs actuellement en cache,
+     * ferme proprement la base de données des inventaires,
+     * et nettoie tous les minuteurs d'inactivité.
+     */
+    public saveAll(): void {
+        this.logger.info(`Sauvegarde globale de ${this.players.size} joueur(s) actif(s)...`);
+
+        for (const [id, player] of this.players.entries()) {
+            // 1. Sauvegarde des stats du joueur en DB
+            this.save(player);
+
+            // 2. Nettoie le timer d'inactivité
+            this.clearUnloadTimer(id);
+        }
+
+        // 3. Fermeture / Sauvegarde finale de la base de données des inventaires
+        InventoryEntity.save();
+
+        this.logger.info("Tous les joueurs actifs ont été sauvegardés avec succès.");
+    }
 }

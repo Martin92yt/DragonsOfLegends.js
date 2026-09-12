@@ -56,13 +56,6 @@ export interface PlayerAttributes {
     defense: number;
 }
 
-export interface GainExperienceResult {
-    amount: number;
-    total: number;
-    leveledUp: boolean;
-    level: number;
-}
-
 // --- Snapshots ---
 export interface PlayerSnapshot {
     id: string;
@@ -73,10 +66,4 @@ export interface PlayerSnapshot {
     health: PlayerHealth;
     attributes: PlayerAttributes;
     locationId: string;
-}
-
-export interface DamageResult {
-    reducedDamage: number;
-    currentHealth: number;
-    rawDamage: number;
 }

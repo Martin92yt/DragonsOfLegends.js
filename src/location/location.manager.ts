@@ -1,13 +1,31 @@
 import { LocationFlags, hasFlag } from "./location.flags.js";
 import { LocationCreateParametres, LocationCreateResult } from "./location.interface.js";
 import { Logger } from "../utils/logger.js";
+import { LocationBuilder } from "./location.builder.js";
+import { BoatWaterFlagRequiredError, InvalidConnectionTargetError, LocationAlreadyExistsError, LocationInexistentLinkError, MultipleStartingCitiesError, NonReciprocalConnectionError, NoStartingCityError, SelfConnectionError, UnreachableLocationsError } from "../types/error.js";
 
 export default class LocationManager {
     private readonly logger = new Logger({ context: "LocationManager" });
     private readonly locations = new Map<string, LocationCreateResult>();
 
+    // 1. Création en masse (accepte soit des objets bruts, soit directement des builders)
+    public bulkCreate(items: (LocationCreateParametres | LocationBuilder)[]): LocationCreateResult[] {
+        const results: LocationCreateResult[] = [];
+        for (const item of items) {
+            // Si c'est une instance du Builder, on appelle .build() automatiquement
+            const params = item instanceof LocationBuilder ? item.build() : item;
+            results.push(this.create(params));
+        }
+        return results;
+    }
+
+    // 2. Syntaxe fluide pour initialiser un builder directement depuis le manager
+    public add(id: string): LocationBuilder {
+        return new LocationBuilder(id);
+    }
+
     public create(params: LocationCreateParametres): LocationCreateResult {
-        if (this.locations.has(params.id)) throw new Error(`Location "${params.id}" already exists`);
+        if (this.locations.has(params.id)) throw new LocationAlreadyExistsError(params.id);
         
         const rawFlags = params.flags ?? LocationFlags.None;
         const flags = Array.isArray(rawFlags) ? rawFlags.reduce((a, b) => a | b, 0) : rawFlags;
@@ -19,14 +37,12 @@ export default class LocationManager {
         };
 
         this.locations.set(location.id, location);
-        // Changé en trace/supprimé de la console visible par défaut pour éviter le spam
-        // this.logger.trace(`Location created: ${location.id} (${location.type})`);
         return location;
     }
 
     public link(fromId: string, toId: string, transport: "land" | "boat"): void {
         const from = this.locations.get(fromId), to = this.locations.get(toId);
-        if (!from || !to) throw new Error(`Cannot link inexistent locations: "${fromId}" <-> "${toId}"`);
+        if (!from || !to) throw new LocationInexistentLinkError(fromId, toId);
         if (!from.connections[transport].includes(toId)) from.connections[transport].push(toId);
         if (!to.connections[transport].includes(fromId)) to.connections[transport].push(fromId);
         this.logger.debug(`Linked locations via ${transport}: ${fromId} <-> ${toId}`);
@@ -53,8 +69,8 @@ export default class LocationManager {
 
     private validateStartingCity(): LocationCreateResult {
         const starters = [...this.locations.values()].filter(l => hasFlag(l.flags, LocationFlags.StarterCity));
-        if (starters.length === 0) throw new Error("No StartingCity defined");
-        if (starters.length > 1) throw new Error(`Multiple StartingCity found: ${starters.map(l => l.id).join(", ")}`);
+        if (starters.length === 0) throw new NoStartingCityError();
+        if (starters.length > 1) throw new MultipleStartingCitiesError(starters.map(l => l.id));
         return starters[0];
     }
 
@@ -62,12 +78,12 @@ export default class LocationManager {
         for (const loc of this.locations.values()) {
             for (const mode of ["land", "boat"] as const) {
                 for (const destId of loc.connections[mode]) {
-                    if (destId === loc.id) throw new Error(`Location "${loc.id}" cannot connect to itself by ${mode}`);
+                    if (destId === loc.id) throw new SelfConnectionError(loc.id, mode);
                     const dest = this.locations.get(destId);
-                    if (!dest) throw new Error(`Location "${loc.id}" has invalid ${mode} connection to "${destId}"`);
-                    if (!dest.connections[mode].includes(loc.id)) throw new Error(`${mode} connection "${loc.id}" -> "${dest.id}" is not reciprocal`);
+                    if (!dest) throw new InvalidConnectionTargetError(loc.id, mode, destId);
+                    if (!dest.connections[mode].includes(loc.id)) throw new NonReciprocalConnectionError(mode, loc.id, dest.id);
                     if (mode === "boat" && (!hasFlag(loc.flags, LocationFlags.OnWater) || !hasFlag(dest.flags, LocationFlags.OnWater))) {
-                        throw new Error(`Boat connection "${loc.id}" -> "${dest.id}" requires OnWater flag on both`);
+                        throw new BoatWaterFlagRequiredError(loc.id, destId);
                     }
                 }
             }
@@ -83,7 +99,7 @@ export default class LocationManager {
             }
         }
         const unreached = [...this.locations.values()].filter(l => !visited.has(l.id) && !hasFlag(l.flags, LocationFlags.TeleportOnly));
-        if (unreached.length > 0) throw new Error(`Unreachable locations: ${unreached.map(l => l.id).join(", ")}`);
+        if (unreached.length > 0) throw new UnreachableLocationsError(unreached.map(l => l.id));
     }
 
     public getStartingCity(): LocationCreateResult { return this.validateStartingCity(); }

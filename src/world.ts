@@ -6,6 +6,8 @@ import { PlayerClass } from "./player/player.class.js";
 import OfficialMap from "./location/official-map.js";
 import { EnemyType } from "./enemy/enemy.type.js";
 import { Logger } from "./utils/logger.js";
+import { PlayerNoCharacterError, SelfCombatError } from "./types/error.js";
+import { EquipmentSlot } from "./inventory/item.enum.js"
 
 const logger = new Logger({ context: "World" });
 
@@ -26,15 +28,19 @@ export default class World {
     public readonly combat = new CombatManager();
     public readonly location = new LocationManager();
 
-    constructor(options: Settings = { useWorld: false }) { if (options.useWorld) { new OfficialMap(this); } }
+    constructor(options: Settings = { useWorld: false }) {
+        if (options.useWorld) {
+            new OfficialMap(this);
+        }
+    }
 
     // Exemple de fonction de duel à placer dans ton gestionnaire ou World
     public startDuel(player1Id: string, player2Id: string) {
         const p1 = this.players.get(player1Id);
         const p2 = this.players.get(player2Id);
 
-        if (!p1 || !p2) throw new Error("L'un des joueurs n'a pas de personnage enregistré.");
-        if (p1.id === p2.id) throw new Error("Vous ne pouvez pas vous battre vous-même !");
+        if (!p1 || !p2) throw new PlayerNoCharacterError();
+        if (p1.id === p2.id) throw new SelfCombatError();
 
         // Calcul de la puissance globale basé sur les attributs (Force + Agilité + Niveau)
         const p1Power = p1.attributes.strength + p1.attributes.agility + (p1.level * 2) + Math.floor(Math.random() * 10);
@@ -50,6 +56,18 @@ export default class World {
             p2Power
         };
     }
+
+    public async quick() {
+        this.combat.stopAllCombats();
+
+        if (this.players && typeof (this.players as any).saveAll === "function") {
+            (this.players as any).saveAll();
+        }
+        
+        logger.blank();
+        logger.info("Thank you for using the library!");
+        logger.blank();
+    }
 }
 
-export { PlayerClass, EnemyType, LocationType };
+export { PlayerClass, EnemyType, LocationType, EquipmentSlot };
