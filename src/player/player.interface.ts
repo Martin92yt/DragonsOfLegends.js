@@ -10,6 +10,7 @@ export interface PlayerData {
     experience: number;
     health: number;
     maxHealth: number;
+    partener: string;
     attributePoints: number;
     strength: number;
     agility: number;

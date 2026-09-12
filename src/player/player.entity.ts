@@ -7,6 +7,7 @@ import { EnemyType } from "../enemy/enemy.type.js";
 import { ExplorationResult, GainExperienceResult, DamageResult } from "../types/result.js";
 import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError, UnknownPlayerClassError } from "../types/error.js";
 import World from "../world.js"
+import PlayerMarriage from "./player.marriage.js";
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
 export default class PlayerEntity {
@@ -23,6 +24,7 @@ export default class PlayerEntity {
     public health: PlayerHealth;
     public attributes: PlayerAttributes;
     public readonly inventory: InventoryEntity;
+    public marriage: PlayerMarriage;
     public isTravelling = false;
     public inCombat = false;
 
@@ -32,8 +34,8 @@ export default class PlayerEntity {
         public name: string,
         public readonly classId: PlayerClass,
         public location: string,
-        level = 1, experience = 0, health = PlayerEntity.BASE_HEALTH, maxHealth = PlayerEntity.BASE_HEALTH,
-        strength?: number, agility?: number, intelligence?: number, defense?: number, attributePoints = 0, gold = 0
+        level = 1, experience = 0, health = PlayerEntity.BASE_HEALTH, maxHealth = PlayerEntity.BASE_HEALTH, partener: string,
+        strength?: number, agility?: number, intelligence?: number, defense?: number, attributePoints = 0, gold: number = 0
     ) {
         this.rpg = rpg;
         this.gold = gold;
@@ -50,6 +52,7 @@ export default class PlayerEntity {
         };
         
         this.inventory = new InventoryEntity(this.id, this);
+        this.marriage = new PlayerMarriage(this, partener)
         this.updateMaxHealth();
 
         this.logger.debug(`Player entity initialized for ${this.name} (ID: ${this.id}).`);

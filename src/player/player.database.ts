@@ -4,6 +4,7 @@ import { Logger } from "../utils/logger.js";
 
 interface PlayerRecord { id: string; name: string; classId: PlayerData["classId"]; locationId: string; gold: number; }
 interface StatsRecord { level: number; experience: number; health: number; maxHealth: number; strength: number; agility: number; intelligence: number; defense: number; attributePoints: number; }
+interface MarriageRecord { player1: string; player2: string; dateStart: string; }
 
 export default class PlayerDatabase {
     private readonly logger = new Logger({ context: "PlayerDatabase" });
@@ -33,6 +34,18 @@ export default class PlayerDatabase {
         if (!player) return undefined;
 
         const stats = this.findStats(identifier);
+        
+        // Récupérer le partenaire depuis la table Marriage (où le joueur est Player1 ou Player2)
+        const marriage = this.database.prepare(
+            `SELECT Player1, Player2 FROM Marriage WHERE Player1 = ? OR Player2 = ?`
+        ).get(identifier, identifier) as { Player1: string; Player2: string } | undefined;
+
+        // Si une ligne existe, le partenaire est l'autre ID
+        let partnerId = "";
+        if (marriage) {
+            partnerId = marriage.Player1 === identifier ? marriage.Player2 : marriage.Player1;
+        }
+
         return {
             id: player.id,
             name: player.name,
@@ -41,6 +54,7 @@ export default class PlayerDatabase {
             locationId: player.locationId,
             level: stats?.level ?? 1,
             experience: stats?.experience ?? 0,
+            partener: partnerId, // <--- Ajouté ici !
             health: stats?.health ?? 100,
             maxHealth: stats?.maxHealth ?? 100,
             strength: stats?.strength ?? 0,
@@ -54,6 +68,7 @@ export default class PlayerDatabase {
     public delete(identifier: string): boolean {
         const transaction = this.database.transaction(() => {
             this.database.prepare(`DELETE FROM Stats WHERE Identifier = ?`).run(identifier);
+            this.database.prepare(`DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?`).run(identifier, identifier);
             const result = this.database.prepare(`DELETE FROM Player WHERE Identifier = ?`).run(identifier);
             return result.changes > 0;
         });
@@ -93,6 +108,13 @@ export default class PlayerDatabase {
                 Defense INTEGER NOT NULL DEFAULT 0,
                 AttributePoints INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (Identifier) REFERENCES Player(Identifier) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS Marriage (
+                Player1 TEXT NOT NULL,
+                Player2 TEXT NOT NULL,
+                DateStart TEXT NOT NULL,
+                FOREIGN KEY (Player1) REFERENCES Player(Identifier) ON DELETE CASCADE,
+                FOREIGN KEY (Player2) REFERENCES Player(Identifier) ON DELETE CASCADE
             );
         `);
     }

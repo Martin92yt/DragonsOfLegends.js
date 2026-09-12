@@ -46,6 +46,7 @@ export default class PlayerManager {
             data.experience,
             data.health,
             data.maxHealth,
+            data.partener,
             data.strength,
             data.agility,
             data.intelligence,
@@ -69,7 +70,20 @@ export default class PlayerManager {
         const { id, name, playerClass } = options;
         if (this.exist(id)) throw new PlayerAlreadyExistsError(id);
 
-        const player = new Player(this.rpg, id, name, playerClass, this.rpg.location.getStartingCityId());
+        // Correction : on passe une chaîne vide ou le partenaire par défaut s'il y en a un
+        const player = new Player(
+            this.rpg, 
+            id, 
+            name, 
+            playerClass, 
+            this.rpg.location.getStartingCityId(), 
+            1, // level
+            0, // experience
+            100, // health
+            100, // maxHealth
+            "" // partener vide par défaut à la création
+        );
+        
         this.players.set(id, player);
         this.save(player);
         this.refreshUnloadTimer(id);
@@ -136,6 +150,7 @@ export default class PlayerManager {
             experience: player.experience.current,
             health: player.health.current,
             maxHealth: player.health.max,
+            partener: player.marriage?.getPartnerId() ?? "", // Sauvegarde propre du partenaire si géré via un module marriage
             strength: player.attributes.strength,
             agility: player.attributes.agility,
             intelligence: player.attributes.intelligence,
@@ -150,25 +165,15 @@ export default class PlayerManager {
     public has(id: string): boolean { return this.exist(id); }
     public get size(): number { return this.players.size; }
 
-    /**
-     * Sauvegarde tous les joueurs actuellement en cache,
-     * ferme proprement la base de données des inventaires,
-     * et nettoie tous les minuteurs d'inactivité.
-     */
     public saveAll(): void {
         this.logger.info(`Sauvegarde globale de ${this.players.size} joueur(s) actif(s)...`);
 
         for (const [id, player] of this.players.entries()) {
-            // 1. Sauvegarde des stats du joueur en DB
             this.save(player);
-
-            // 2. Nettoie le timer d'inactivité
             this.clearUnloadTimer(id);
         }
 
-        // 3. Fermeture / Sauvegarde finale de la base de données des inventaires
         InventoryEntity.save();
-
         this.logger.info("Tous les joueurs actifs ont été sauvegardés avec succès.");
     }
 }
