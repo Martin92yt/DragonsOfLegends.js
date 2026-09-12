@@ -23,4 +23,6 @@ export enum EnemyType {
 }
 
 export type EnemyTypeId = `${EnemyType}`;
-export const isEnemyType = (value: string): value is EnemyType => Object.values(EnemyType).includes(value as EnemyType);
+
+export const isEnemyType = (value: string): value is EnemyType => 
+    Object.values(EnemyType).includes(value as EnemyType);

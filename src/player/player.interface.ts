@@ -1,5 +1,6 @@
 import { PlayerClass } from "./player.class.js";
 
+// --- Base Database & Transport Data ---
 export interface PlayerData {
     id: string;
     name: string;
@@ -23,13 +24,46 @@ export interface CreatePlayerOptions {
     locationId: string;
 }
 
-export interface PlayerCount { active: number; total: number; }
-export interface ClassStats { strength: number; agility: number; intelligence: number; defense: number; }
-export interface PlayerHealth { current: number; max: number; } 
-export interface PlayerExperience { current: number; required: number; } 
-export interface PlayerAttributes { points: number; strength: number; agility: number; intelligence: number; defense: number; }
-export interface GainExperienceResult { amount: number; total: number; leveledUp: boolean; level: number; }
+// --- Status & Counts ---
+export interface PlayerCount {
+    active: number;
+    total: number;
+}
 
+export interface ClassStats {
+    strength: number;
+    agility: number;
+    intelligence: number;
+    defense: number;
+}
+
+// --- Entity Sub-Structures ---
+export interface PlayerHealth {
+    current: number;
+    max: number;
+} 
+
+export interface PlayerExperience {
+    current: number;
+    required: number;
+} 
+
+export interface PlayerAttributes {
+    points: number;
+    strength: number;
+    agility: number;
+    intelligence: number;
+    defense: number;
+}
+
+export interface GainExperienceResult {
+    amount: number;
+    total: number;
+    leveledUp: boolean;
+    level: number;
+}
+
+// --- Snapshots ---
 export interface PlayerSnapshot {
     id: string;
     name: string;
@@ -39,4 +73,10 @@ export interface PlayerSnapshot {
     health: PlayerHealth;
     attributes: PlayerAttributes;
     locationId: string;
+}
+
+export interface DamageResult {
+    reducedDamage: number;
+    currentHealth: number;
+    rawDamage: number;
 }

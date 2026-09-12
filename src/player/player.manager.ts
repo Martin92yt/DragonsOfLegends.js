@@ -1,22 +1,20 @@
 import { CreatePlayerOptions, PlayerCount, PlayerData } from "./player.interface.js";
-import PlayerDatabase from "./player.repository.js";
-import InventoryDatabase from "../inventory/inventory.repository.js";
+import PlayerDatabase from "./player.database.js";
 import Player from "./player.entity.js";
 import { Logger } from "../utils/logger.js";
-import World from "../index.js";
+import World from "../world.js";
 
 export default class PlayerManager {
     private static readonly INACTIVITY_TIME = 15 * 60 * 1000;
 
-    #logger = new Logger({ context: "PlayerManager" });
-    #rpg: World;
+    private readonly logger = new Logger({ context: "PlayerManager" });
+    private readonly rpg: World;
     private readonly players = new Map<string, Player>();
     private readonly unloadTimers = new Map<string, NodeJS.Timeout>();
     private readonly database = new PlayerDatabase();
-    private readonly inventoryDb = new InventoryDatabase();
 
     constructor(rpg: World) { 
-        this.#rpg = rpg; 
+        this.rpg = rpg; 
     }
 
     public ensure(id: string): Player | undefined;
@@ -52,15 +50,14 @@ export default class PlayerManager {
             data.attributePoints,
         );
 
-        // Chargement de l'inventaire depuis la BDD d'inventaire
-        const savedItems = this.inventoryDb.getPlayerInventory(id);
+        // L'inventaire se charge tout seul via l'entité du joueur
         if (loadedPlayer.inventory && typeof loadedPlayer.inventory.load === "function") {
-            loadedPlayer.inventory.load(savedItems);
+            loadedPlayer.inventory.load();
         }
 
         this.players.set(id, loadedPlayer);
         this.refreshUnloadTimer(id);
-        this.#logger.debug(`Player ${id} loaded with inventory.`);
+        this.logger.debug(`Player ${id} loaded into cache with inventory.`);
 
         return loadedPlayer;
     }
@@ -69,12 +66,12 @@ export default class PlayerManager {
         const { id, name, playerClass } = options;
         if (this.exist(id)) throw new Error(`Player ${id} already exists.`);
 
-        const player = new Player(id, name, playerClass, this.#rpg.location.getStartingCityId());
+        const player = new Player(id, name, playerClass, this.rpg.location.getStartingCityId());
         this.players.set(id, player);
         this.save(player);
         this.refreshUnloadTimer(id);
 
-        this.#logger.debug(`Player ${id} created with class ${playerClass}.`);
+        this.logger.info(`New player registered: ${name} (${id}) as class ${playerClass}.`);
         return player;
     }
 
@@ -85,9 +82,15 @@ export default class PlayerManager {
     public delete(id: string): boolean {
         this.clearUnloadTimer(id);
         this.players.delete(id);
-        this.inventoryDb.clearInventory(id);
+        
+        // Suppression propre de l'inventaire via une instance temporaire ou l'entité
+        const tempPlayer = new Player(id, "", "" as any, "");
+        if (tempPlayer.inventory && typeof (tempPlayer.inventory as any).clear === "function") {
+            (tempPlayer.inventory as any).clear();
+        }
+
         const dbDeleted = this.database.delete(id);
-        this.#logger.debug(`Player ${id} permanently deleted.`);
+        this.logger.info(`Player ${id} permanently deleted from database and cache.`);
         return dbDeleted;
     }
 
@@ -101,11 +104,10 @@ export default class PlayerManager {
             this.clearUnloadTimer(id);
             return;
         }
-
+        
         this.save(player);
         this.clearUnloadTimer(id);
         this.players.delete(id);
-        this.#logger.debug(`Player ${id} unloaded from memory.`);
     }
 
     private refreshUnloadTimer(id: string): void {
@@ -139,11 +141,8 @@ export default class PlayerManager {
             attributePoints: player.attributes.points,
         };
         
-        // Sauvegarde des stats et de l'inventaire
+        // Sauvegarde des stats (l'inventaire se sauvegarde déjà tout seul dans InventoryEntity lors des .add() / .remove())
         this.database.save(data);
-        if (player.inventory && typeof player.inventory.getItems === "function") {
-            this.inventoryDb.savePlayerInventory(player.id, player.inventory.getItems());
-        }
     }
 
     public has(id: string): boolean { return this.exist(id); }

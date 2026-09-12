@@ -6,7 +6,7 @@ interface PlayerRecord { id: string; name: string; classId: PlayerData["classId"
 interface StatsRecord { level: number; experience: number; health: number; maxHealth: number; strength: number; agility: number; intelligence: number; defense: number; attributePoints: number; }
 
 export default class PlayerDatabase {
-    #logger = new Logger({ context: "PlayerDatabase" });
+    private readonly logger = new Logger({ context: "PlayerDatabase" });
     private readonly database: Database.Database;
 
     constructor() {
@@ -14,7 +14,9 @@ export default class PlayerDatabase {
         this.database.pragma("foreign_keys = ON");
         this.createTables();
         this.migrateStats();
-        this.#logger.info("Player database initialized successfully.");
+        
+        const totalPlayers = this.count();
+        this.logger.info(`Player database initialized successfully. (${totalPlayers} players registered)`);
     }
 
     public save(player: PlayerData): void {
@@ -23,7 +25,7 @@ export default class PlayerDatabase {
             this.saveStats(player);
         });
         transaction();
-        this.#logger.debug(`Player ${player.id} saved.`);
+        this.logger.debug(`Saved player data for ${player.id} (ID: ${player.name}).`);
     }
 
     public get(identifier: string): PlayerData | undefined {
@@ -56,7 +58,11 @@ export default class PlayerDatabase {
         });
 
         const isDeleted = transaction();
-        if (isDeleted) this.#logger.debug(`Player ${identifier} deleted from database.`);
+        if (isDeleted) {
+            this.logger.info(`Player ${identifier} successfully deleted from database.`);
+        } else {
+            this.logger.warn(`Attempted to delete player ${identifier}, but no record was found.`);
+        }
         return isDeleted;
     }
 
@@ -104,7 +110,7 @@ export default class PlayerDatabase {
         for (const [column, query] of Object.entries(migrations)) {
             if (existingColumns.has(column)) continue;
             this.database.exec(query);
-            this.#logger.debug(`Added Stats.${column} column.`);
+            this.logger.info(`Migration applied: Added Stats.${column} column.`);
         }
     }
 

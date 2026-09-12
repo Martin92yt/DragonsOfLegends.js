@@ -2,7 +2,10 @@ import { LocationFlags } from "./location.flags.js";
 import { LocationType } from "./location.type.js";
 import Enemy from "../enemy/enemy.entity.js";
 
-export interface LocationConnection { land: string[]; boat: string[]; }
+export interface LocationConnection { 
+    land: string[]; 
+    boat: string[]; 
+}
 
 export interface LocationCreateParametres {
     id: string;

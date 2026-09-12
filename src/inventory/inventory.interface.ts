@@ -19,7 +19,7 @@ export interface RemoveItemParameters {
 export interface InventoryItemRecord {
     id?: number;
     playerId: string;
-    itemId: string; // <--- C'est ici le nom exact en BDD
+    itemId: string; // Nom de la colonne en base de données
     quantity: number;
     data?: ItemNBT | null;
 }

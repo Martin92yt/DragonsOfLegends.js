@@ -1,6 +1,6 @@
 import { LocationFlags } from "../location/location.flags.js";
 import { LocationType } from "../location/location.type.js";
-import World from "../index.js";
+import World from "../world.js";
 
 export default class OfficialMap {
     private readonly rpg: World;
@@ -20,6 +20,7 @@ export default class OfficialMap {
     }
 
     public create(): void {
+
         // --- ZONE NORD ---
         this.add("Embercross", LocationType.City, { flags: LocationFlags.StarterCity, land: ["Twilight Farm", "Emerald Ferry"] });
         this.add("Twilight Farm", LocationType.City, { flags: LocationFlags.OnWater, land: ["Embercross", "Emerald Ferry"], boat: ["Ironmill"] });

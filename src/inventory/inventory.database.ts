@@ -3,14 +3,14 @@ import { Logger } from "../utils/logger.js";
 import { InventoryItemRecord } from "./inventory.interface.js";
 
 export default class InventoryDatabase {
-    #logger = new Logger({ context: "InventoryDatabase" });
+    private readonly logger = new Logger({ context: "InventoryDatabase" });
     private readonly database: Database.Database;
 
     constructor() {
         this.database = new Database("./data/inventory.db");
         this.database.pragma("foreign_keys = ON");
         this.createTables();
-        this.#logger.info("Inventory database initialized successfully.");
+        this.logger.info("Inventory database initialized successfully.");
     }
 
     public getPlayerInventory(playerId: string): InventoryItemRecord[] {
@@ -50,7 +50,6 @@ export default class InventoryDatabase {
         });
 
         transaction();
-        this.#logger.debug(`Inventory saved for player ${playerId}.`);
     }
 
     public clearInventory(playerId: string): boolean {

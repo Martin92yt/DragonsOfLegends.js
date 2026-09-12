@@ -13,7 +13,7 @@
   "license": "ISC",
   "author": "Martin92yt",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "src/world.ts",
   "scripts": {
     "sandbox": "tsx ../sandbox/nodiscord.ts",
     "discord": "tsx ../sandbox/index.ts",

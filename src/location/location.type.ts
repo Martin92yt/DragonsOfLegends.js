@@ -5,4 +5,6 @@ export enum LocationType {
 }
 
 export type LocationTypeId = `${LocationType}`;
-export const isLocationType = (value: string): value is LocationType => Object.values(LocationType).includes(value as LocationType);
+
+export const isLocationType = (value: string): value is LocationType => 
+    Object.values(LocationType).includes(value as LocationType);

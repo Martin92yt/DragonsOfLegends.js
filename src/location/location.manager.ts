@@ -1,7 +1,9 @@
 import { LocationFlags, hasFlag } from "./location.flags.js";
 import { LocationCreateParametres, LocationCreateResult } from "./location.interface.js";
+import { Logger } from "../utils/logger.js";
 
 export default class LocationManager {
+    private readonly logger = new Logger({ context: "LocationManager" });
     private readonly locations = new Map<string, LocationCreateResult>();
 
     public create(params: LocationCreateParametres): LocationCreateResult {
@@ -10,11 +12,15 @@ export default class LocationManager {
         const rawFlags = params.flags ?? LocationFlags.None;
         const flags = Array.isArray(rawFlags) ? rawFlags.reduce((a, b) => a | b, 0) : rawFlags;
         const location: LocationCreateResult = {
-            id: params.id, type: params.type, flags,
+            id: params.id, 
+            type: params.type, 
+            flags,
             connections: { land: params.connections?.land ?? [], boat: params.connections?.boat ?? [] }
         };
 
         this.locations.set(location.id, location);
+        // Changé en trace/supprimé de la console visible par défaut pour éviter le spam
+        // this.logger.trace(`Location created: ${location.id} (${location.type})`);
         return location;
     }
 
@@ -23,6 +29,7 @@ export default class LocationManager {
         if (!from || !to) throw new Error(`Cannot link inexistent locations: "${fromId}" <-> "${toId}"`);
         if (!from.connections[transport].includes(toId)) from.connections[transport].push(toId);
         if (!to.connections[transport].includes(fromId)) to.connections[transport].push(fromId);
+        this.logger.debug(`Linked locations via ${transport}: ${fromId} <-> ${toId}`);
     }
 
     public get(id: string): LocationCreateResult | undefined { return this.locations.get(id); }
@@ -34,12 +41,14 @@ export default class LocationManager {
         this.locations.clear();
         for (const item of list) this.create(item);
         this.validate();
+        this.logger.info(`Successfully deserialized and validated ${list.length} locations.`);
     }
 
     public validate(): void {
         const starter = this.validateStartingCity();
         this.validateConnections();
         this.validateReachability(starter.id);
+        this.logger.info(`All ${this.locations.size} locations validated successfully.`);
     }
 
     private validateStartingCity(): LocationCreateResult {

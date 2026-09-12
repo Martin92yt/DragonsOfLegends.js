@@ -15,7 +15,7 @@ export default class CombatManager {
         const enemy = this.enemies.create(player);
         const combat = new Combat(player, enemy);
 
-        this.logger.info(`Starting combat for player ${player.id} against ${enemy.name}.`);
+        this.logger.info(`Combat started: ${player.name} vs ${enemy.name} (Lv. ${player.level}, ${enemy.health} HP).`);
         this.combats.set(player.id, combat);
         return combat;
     }
@@ -25,12 +25,26 @@ export default class CombatManager {
         if (!combat) throw new Error(`Player ${playerId} is not in combat.`);
 
         const result = combat.attack();
-        if (result.victory || result.defeat) this.combats.delete(playerId);
+        if (result.victory || result.defeat) {
+            if (result.defeat) this.logger.info(`${combat.player.name} was defeated by ${combat.enemy.name}.`)
+            this.combats.delete(playerId)
+        };
         return result;
     }
 
-    public has(playerId: string): boolean { return this.combats.has(playerId); }
-    public get(playerId: string): Combat | undefined { return this.combats.get(playerId); }
-    public clear(playerId: string): boolean { return this.combats.delete(playerId); }
-    public get size(): number { return this.combats.size; }
+    public has(playerId: string): boolean { 
+        return this.combats.has(playerId); 
+    }
+
+    public get(playerId: string): Combat | undefined { 
+        return this.combats.get(playerId); 
+    }
+
+    public clear(playerId: string): boolean { 
+        return this.combats.delete(playerId); 
+    }
+
+    public get size(): number { 
+        return this.combats.size; 
+    }
 }
