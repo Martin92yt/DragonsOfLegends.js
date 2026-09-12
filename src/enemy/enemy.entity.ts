@@ -136,7 +136,8 @@ export default class EnemyEntity {
         public readonly maxHealth: number,
         public readonly strength: number,
         public readonly defense: number,
-        public readonly experience: number
+        public readonly experience: number,
+        public readonly gold: number
     ) {}
 
     public takeDamage(damage: number): number {

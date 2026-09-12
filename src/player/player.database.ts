@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { PlayerData } from "./player.interface.js";
 import { Logger } from "../utils/logger.js";
 
-interface PlayerRecord { id: string; name: string; classId: PlayerData["classId"]; locationId: string; }
+interface PlayerRecord { id: string; name: string; classId: PlayerData["classId"]; locationId: string; gold: number; }
 interface StatsRecord { level: number; experience: number; health: number; maxHealth: number; strength: number; agility: number; intelligence: number; defense: number; attributePoints: number; }
 
 export default class PlayerDatabase {
@@ -36,6 +36,7 @@ export default class PlayerDatabase {
         return {
             id: player.id,
             name: player.name,
+            gold: player.gold ?? 0,
             classId: player.classId,
             locationId: player.locationId,
             level: stats?.level ?? 1,
@@ -77,6 +78,7 @@ export default class PlayerDatabase {
                 Name TEXT NOT NULL, 
                 Identifier TEXT NOT NULL UNIQUE, 
                 Class TEXT NOT NULL DEFAULT 'unknown', 
+                Gold INTEGER NOT NULL DEFAULT 0, 
                 LocationId TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS Stats (
@@ -114,20 +116,6 @@ export default class PlayerDatabase {
         }
     }
 
-    private savePlayer(player: PlayerData): void {
-        this.database
-            .prepare(`
-                INSERT INTO Player (Name, Identifier, Class, LocationId)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(Identifier)
-                DO UPDATE SET
-                    Name = excluded.Name,
-                    Class = excluded.Class,
-                    LocationId = excluded.LocationId
-            `)
-            .run(player.name, player.id, player.classId, player.locationId);
-    }
-
     private saveStats(player: PlayerData): void {
         this.database
             .prepare(`
@@ -147,21 +135,42 @@ export default class PlayerDatabase {
             `)
             .run(
                 player.id,
-                player.level,
-                player.experience,
-                player.health,
-                player.maxHealth,
-                player.strength,
-                player.agility,
-                player.intelligence,
-                player.defense,
-                player.attributePoints,
+                player.level ?? 1,
+                player.experience ?? 0,
+                player.health ?? 100,
+                player.maxHealth ?? 100,
+                player.strength ?? 0,
+                player.agility ?? 0,
+                player.intelligence ?? 0,
+                player.defense ?? 0,
+                player.attributePoints ?? 0,
+            );
+    }
+
+    private savePlayer(player: PlayerData): void {
+        this.database
+            .prepare(`
+                INSERT INTO Player (Name, Identifier, Class, LocationId, Gold)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(Identifier)
+                DO UPDATE SET
+                    Name = excluded.Name,
+                    Class = excluded.Class,
+                    LocationId = excluded.LocationId,
+                    Gold = excluded.Gold
+            `)
+            .run(
+                player.name ?? "Unknown", 
+                player.id, 
+                player.classId ?? "unknown", 
+                player.locationId ?? "", 
+                player.gold ?? 0
             );
     }
 
     private findPlayer(identifier: string): PlayerRecord | undefined {
         return this.database
-            .prepare(`SELECT Name as name, Identifier as id, Class as classId, LocationId as locationId FROM Player WHERE Identifier = ?`)
+            .prepare(`SELECT Name as name, Identifier as id, Class as classId, LocationId as locationId, Gold as gold FROM Player WHERE Identifier = ?`)
             .get(identifier) as PlayerRecord | undefined;
     }
 

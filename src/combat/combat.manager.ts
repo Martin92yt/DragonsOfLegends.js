@@ -76,7 +76,9 @@ export default class CombatManager {
 
             // Donne une petite compensation d'XP (ex: 15 XP ou basé sur le niveau)
             const compensationXP = player.level * 10;
+
             player.addXP(compensationXP);
+            player.gold += player.gold * 0.01;
 
             // Remet le flag de combat à false sur le joueur si la propriété existe
             if (player.inCombat !== undefined) {

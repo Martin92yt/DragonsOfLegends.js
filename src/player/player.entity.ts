@@ -18,6 +18,7 @@ export default class PlayerEntity {
     private readonly logger = new Logger({ context: "Player" });
 
     public level: number;
+    public gold: number;
     public experience: PlayerExperience;
     public health: PlayerHealth;
     public attributes: PlayerAttributes;
@@ -32,9 +33,10 @@ export default class PlayerEntity {
         public readonly classId: PlayerClass,
         public location: string,
         level = 1, experience = 0, health = PlayerEntity.BASE_HEALTH, maxHealth = PlayerEntity.BASE_HEALTH,
-        strength?: number, agility?: number, intelligence?: number, defense?: number, attributePoints = 0,
+        strength?: number, agility?: number, intelligence?: number, defense?: number, attributePoints = 0, gold = 0
     ) {
         this.rpg = rpg;
+        this.gold = gold;
         const baseStats = this.generateBaseStats();
         this.level = Math.max(1, level);
         this.experience = { current: Math.max(0, experience), required: this.level * PlayerEntity.XP_PER_LEVEL };
@@ -47,10 +49,7 @@ export default class PlayerEntity {
             defense: defense ?? baseStats.defense,
         };
         
-        // Instanciation de l'inventaire dédié au joueur
         this.inventory = new InventoryEntity(this.id, this);
-        
-        // 🔄 Calcul initial de la santé max en fonction des équipements par défaut s'il y en a
         this.updateMaxHealth();
 
         this.logger.debug(`Player entity initialized for ${this.name} (ID: ${this.id}).`);
@@ -124,7 +123,8 @@ public async moveTo(
                 baseHp,
                 5 + this.level * 2,
                 2 + this.level,
-                15 * this.level
+                15 * this.level,
+                10 * this.gold
             );
 
             this.rpg.combat.startWithEnemy(this, enemy); 
@@ -246,7 +246,7 @@ public async moveTo(
 
     public toJSON(): PlayerSnapshot {
         return {
-            id: this.id, name: this.name, classId: this.classId, level: this.level, locationId: this.location,
+            id: this.id, name: this.name, classId: this.classId, level: this.level, locationId: this.location, gold: this.gold,
             experience: { ...this.experience }, health: { ...this.health }, attributes: { ...this.attributes },
         };
     }

@@ -15,6 +15,7 @@ export interface PlayerData {
     agility: number;
     intelligence: number;
     defense: number;
+    gold: number;
 }
 
 export interface CreatePlayerOptions {
@@ -66,4 +67,5 @@ export interface PlayerSnapshot {
     health: PlayerHealth;
     attributes: PlayerAttributes;
     locationId: string;
+    gold: number;
 }

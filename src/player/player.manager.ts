@@ -51,6 +51,7 @@ export default class PlayerManager {
             data.intelligence,
             data.defense,
             data.attributePoints,
+            data.gold
         );
 
         if (loadedPlayer.inventory && typeof loadedPlayer.inventory.load === "function") {
@@ -140,6 +141,7 @@ export default class PlayerManager {
             intelligence: player.attributes.intelligence,
             defense: player.attributes.defense,
             attributePoints: player.attributes.points,
+            gold: player.gold,
         };
         
         this.database.save(data);

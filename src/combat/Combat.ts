@@ -19,6 +19,7 @@ export default class Combat {
         // 2. Vérification si le monstre est mort
         if (!this.enemy.isAlive()) {
             this.player.addXP(this.enemy.experience);
+            this.player.gold += this.enemy.gold;
             this.logger.info(`${this.player.name} defeated ${this.enemy.name}.`);
             
             return { 
