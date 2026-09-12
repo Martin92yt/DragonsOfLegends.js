@@ -176,13 +176,14 @@ export default class EnemyEntity {
     public rollDrops(): { itemId: string; quantity: number }[] {
         const possibleLoots = ENEMY_LOOT_TABLES[this.type] || [];
         const droppedItems: { itemId: string; quantity: number }[] = [];
+        const lootLogger = new Logger({ context: "Loot" });
 
         for (const loot of possibleLoots) {
             const roll = Math.random() * 100;
             if (roll <= loot.dropRate) {
                 const quantity = Math.floor(Math.random() * (loot.maxQuantity - loot.minQuantity + 1)) + loot.minQuantity;
                 droppedItems.push({ ...loot, quantity });
-                this.logger.debug(`${this.name} dropped ${quantity}x ${loot.itemId} (roll=${roll.toFixed(2)}, chance=${loot.dropRate})`);
+                lootLogger.debug(`${this.name} dropped ${quantity}x ${loot.itemId} (roll=${roll.toFixed(2)}, chance=${loot.dropRate})`);
             }
         }
 

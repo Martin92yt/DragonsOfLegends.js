@@ -16,11 +16,13 @@ export default class InventoryDatabase {
 
     public getPlayerInventory(playerId: string): InventoryItemRecord[] {
         const rows = this.database
-            .prepare(`
+            .prepare(
+                `
                 SELECT playerId, itemId, quantity, nbt, name, category, rarity, maxStack, description, isEquipped, equipmentSlot 
                 FROM Inventory 
                 WHERE playerId = ?
-            `)
+            `,
+            )
             .all(playerId) as Array<any>;
 
         return rows.map((row) => ({
@@ -38,10 +40,15 @@ export default class InventoryDatabase {
         }));
     }
 
-    public savePlayerInventory(playerId: string, items: InventoryItemRecord[]): void {
+    public savePlayerInventory(
+        playerId: string,
+        items: InventoryItemRecord[],
+    ): void {
         const transaction = this.database.transaction(() => {
-            this.database.prepare(`DELETE FROM Inventory WHERE playerId = ?`).run(playerId);
-            
+            this.database
+                .prepare(`DELETE FROM Inventory WHERE playerId = ?`)
+                .run(playerId);
+
             const insertStmt = this.database.prepare(`
                 INSERT INTO Inventory (playerId, itemId, quantity, nbt, name, category, rarity, maxStack, description, isEquipped, equipmentSlot)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -49,20 +56,29 @@ export default class InventoryDatabase {
 
             for (const item of items) {
                 const itemId = item.itemId || (item as any).id;
-                if (!itemId) continue; 
+                if (!itemId) continue;
+
+                // 1. Sécurisation de la catégorie (si c'est un tableau, on prend le premier élément ou "misc")
+                let categoryValue = item.category ?? "misc";
+                if (Array.isArray(categoryValue)) {
+                    categoryValue = categoryValue[0] ?? "misc";
+                }
+
+                // 2. Récupération propre des données NBT (cherche dans item.nbt ou item.data)
+                const nbtData = (item as any).nbt ?? item.data;
 
                 insertStmt.run(
                     playerId,
                     itemId,
                     item.quantity ?? 1,
-                    item.data ? JSON.stringify(item.data) : null,
+                    nbtData ? JSON.stringify(nbtData) : null,
                     item.name || "Unknown Item",
-                    item.category || "misc",
+                    categoryValue,
                     item.rarity || "common",
                     item.maxStack ?? 64,
                     item.description ?? null,
                     item.isEquipped ? 1 : 0,
-                    item.equipmentSlot ?? null
+                    item.equipmentSlot ?? null,
                 );
             }
         });
@@ -71,13 +87,17 @@ export default class InventoryDatabase {
     }
 
     public clearInventory(playerId: string): boolean {
-        const result = this.database.prepare(`DELETE FROM Inventory WHERE playerId = ?`).run(playerId);
+        const result = this.database
+            .prepare(`DELETE FROM Inventory WHERE playerId = ?`)
+            .run(playerId);
         return result.changes > 0;
     }
 
     public getPlayerEquipment(playerId: string): EquipmentRecord {
         const rows = this.database
-            .prepare(`SELECT equipmentSlot, itemId FROM Inventory WHERE playerId = ? AND isEquipped = 1 AND equipmentSlot IS NOT NULL`)
+            .prepare(
+                `SELECT equipmentSlot, itemId FROM Inventory WHERE playerId = ? AND isEquipped = 1 AND equipmentSlot IS NOT NULL`,
+            )
             .all(playerId) as Array<{ equipmentSlot: string; itemId: string }>;
 
         const equipment: EquipmentRecord = {
@@ -128,7 +148,18 @@ export default class InventoryDatabase {
                 this.logger.info("Inventory database successfully saved and closed.");
             }
         } catch (error) {
-            this.logger.error("Error while saving and closing inventory database:", error);
+            this.logger.error(
+                "Error while saving and closing inventory database:",
+                error,
+            );
+        }
+    }
+
+    public save(): void {
+        try {
+            this.database.open;
+        } catch (error) {
+            this.logger.error("Error while saving inventory database:", error);
         }
     }
 }

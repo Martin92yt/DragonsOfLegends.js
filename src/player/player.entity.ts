@@ -143,8 +143,10 @@ public async moveTo(
     public addXP(amount: number): GainExperienceResult {
         if (amount <= 0) return { amount: 0, total: this.experience.current, leveledUp: false, level: this.level };
 
-        this.logger.info(`${this.name} gained ${amount} XP (${this.experience.current} → ${this.experience.current+amount} / ${this.experience.required}).`)
-        this.experience.current += amount;
+        const oldXP = this.experience.current;
+        const newXP = oldXP + amount;
+        this.experience.current = newXP;
+        
         let leveledUp = false;
 
         while (this.experience.current >= this.experience.required) {
@@ -153,10 +155,17 @@ public async moveTo(
             leveledUp = true;
         }
 
+        // Log affichant clairement la progression et le passage de niveau si applicable
+        if (leveledUp) {
+            this.logger.info(`${this.name} gained ${amount} XP (${oldXP} → ${newXP}), Level ${this.level}`);
+        } else {
+            this.logger.info(`${this.name} gained ${amount} XP (${oldXP} → ${newXP} / ${this.experience.required}).`);
+        }
+
         return { amount, total: this.experience.current, leveledUp, level: this.level };
     }
 
-    public attack(): number {
+public attack(): number {
         // 1. Calcul de la stat de base selon la classe
         const statMap: Record<string, number> = { 
             warrior: this.attributes.strength, 
@@ -165,71 +174,144 @@ public async moveTo(
         };
         const baseStat = statMap[this.classId] ?? this.attributes.strength;
         
-        let totalDamage = baseStat + Math.floor(Math.random() * 6) - 2;
+        // Calcul du jet aléatoire (roll) entre -2 et +3 (correspondant à ton -2 + aléa de 6)
+        const roll = Math.floor(Math.random() * 6) - 2;
+        let totalDamage = baseStat + roll;
 
         // 2. Intégration des bonus/malus d'équipement
+        let flatBonus = 0;
+        let percentageBonus = 0;
+        let items: any[] = [];
+
         if (this.inventory && typeof this.inventory.getItems === "function") {
-            const items = this.inventory.getItems();
+            items = this.inventory.getItems();
             const equippedItems = items.filter((i: any) => i.isEquipped);
-            
-            let flatBonus = 0;
-            let percentageBonus = 0; // Ex: 0.016 (+1.6%) ou -0.008 (-0.8%)
 
             for (const item of equippedItems) {
                 if (item.data) {
-                    if (typeof item.data.flatDamage === "number") {
-                        flatBonus += item.data.flatDamage;
+                    let contributesToAttack = false;
+
+                    const rawDmgBonus = (item.data as any).damageBonus ?? (item.data as any).flatDamage;
+                    if (typeof rawDmgBonus === "number") {
+                        flatBonus += rawDmgBonus;
+                        contributesToAttack = true;
                     }
-                    // Lecture de la bonne clé + conversion du pourcentage (ex: 1.6 -> 0.016 ou -0.8 -> -0.008)
-                    if (typeof item.data.damageBonusPercent === "number") {
-                        percentageBonus += item.data.damageBonusPercent / 100;
+                    
+                    const rawPctBonus = (item.data as any).damageBonusPercent;
+                    if (typeof rawPctBonus === "number") {
+                        percentageBonus += rawPctBonus / 100;
+                        contributesToAttack = true;
+                    }
+
+                    // USURE
+                    if (contributesToAttack && item.data.durability !== undefined && item.data.durability > 0) {
+                        const rarityMultipliers: Record<string, number> = {
+                            common: 1.5,
+                            uncommon: 1.2,
+                            rare: 1.0,
+                            epic: 0.7,
+                            legendary: 0.4
+                        };
+                        const mult = rarityMultipliers[item.rarity?.toLowerCase()] ?? 1.0;
+                        const durabilityLoss = Math.max(1, Math.floor(1 * mult));
+                        const oldDurability = item.data.durability;
+
+                        item.data.durability = Math.max(0, item.data.durability - durabilityLoss);
+
+                        const durabilityLogger = new Logger({ context: "Durability" });
+                        durabilityLogger.debug(`${item.name}: ${oldDurability} → ${item.data.durability}.`);
+
+                        if (item.data.durability === 0) {
+                            durabilityLogger.debug(`${item.name} is completely broken!`);
+                        }
                     }
                 }
             }
 
             totalDamage += flatBonus;
             totalDamage = totalDamage * (1 + percentageBonus);
+
+            if (this.inventory && typeof this.inventory.save === "function") {
+                this.inventory.save(items); 
+            }
         }
 
         const finalDamage = Math.max(1, Math.floor(totalDamage));
-        this.logger.debug(`Player ${this.name} strikes for ${finalDamage} damage.`);
+
+        // Log d'attaque condensé sous [Combat] au format souhaité
+        const combatLogger = new Logger({ context: "Combat" });
+        combatLogger.debug(`${this.name} attack: base=${baseStat}, roll=${roll}, equipment=+${flatBonus} (+${percentageBonus * 100}%), final=${finalDamage}.`);
+
         return finalDamage;
     }
 
-    public takeDamage(damage: number): DamageResult | null {
+public takeDamage(damage: number): DamageResult | null {
         if (damage <= 0 || !this.isAlive()) {
             return null;
         }
 
-        let baseDefense = this.attributes.defense ?? 0;
+        const baseDefense = this.attributes.defense ?? 0;
+        let items: any[] = [];
+        let flatDefense = 0;
+        let percentDefense = 0; 
 
         if (this.inventory && typeof this.inventory.getItems === "function") {
-            const items = this.inventory.getItems();
+            items = this.inventory.getItems();
             const equippedItems = items.filter((i: any) => i.isEquipped);
-
-            let flatDefense = 0;
-            let percentDefense = 0; // Ex: 0.023 (+2.3% d'armure) ou -0.003 (-0.3% d'armure)
 
             for (const item of equippedItems) {
                 if (item.data) {
-                    // Si tu as de la défense brute (ex: data.defense = 25)
-                    if (typeof item.data.defense === "number") {
-                        flatDefense += item.data.defense;
+                    let contributesToDefense = false;
+
+                    const rawDefBonus = (item.data as any).defenseBonus ?? (item.data as any).defense;
+                    if (typeof rawDefBonus === "number") {
+                        flatDefense += rawDefBonus;
+                        contributesToDefense = true;
                     }
-                    // Lecture de la bonne clé pour les pourcentages d'armure (ex: 2.3 -> 0.023 ou -0.3 -> -0.003)
-                    if (typeof item.data.armorBonusPercent === "number") {
-                        percentDefense += item.data.armorBonusPercent / 100;
+                    
+                    const rawArmorPct = (item.data as any).armorBonusPercent;
+                    if (typeof rawArmorPct === "number") {
+                        percentDefense += rawArmorPct / 100;
+                        contributesToDefense = true;
+                    }
+
+                    // USURE
+                    if (contributesToDefense && item.data.durability !== undefined && item.data.durability > 0) {
+                        const rarityMultipliers: Record<string, number> = {
+                            common: 1.5,
+                            uncommon: 1.2,
+                            rare: 1.0,
+                            epic: 0.7,
+                            legendary: 0.3 
+                        };
+                        const mult = rarityMultipliers[item.rarity?.toLowerCase()] ?? 1.0;
+                        const durabilityLoss = Math.max(1, Math.floor((damage * 0.1) * mult));
+                        const oldDurability = item.data.durability;
+
+                        item.data.durability = Math.max(0, item.data.durability - durabilityLoss);
+                        
+                        // Log conservé avec le nom de l'objet et le format demandé
+                        const loggerCombat = new Logger({ context: "Durability" });
+                        loggerCombat.debug(`${item.name} lost ${oldDurability - item.data.durability} durability (${oldDurability} → ${item.data.durability}).`);
+
+                        if (item.data.durability === 0) {
+                            loggerCombat.debug(`${item.name} is completely broken!`);
+                        }
                     }
                 }
             }
-
-            // Applique d'abord les bonus bruts puis le multiplicateur de pourcentage (qui gère les bonus et les malus)
-            baseDefense = (baseDefense + flatDefense) * (1 + percentDefense);
         }
 
-        const totalDefense = Math.max(0, Math.floor(baseDefense));
+        const calculatedDefense = (baseDefense + flatDefense) * (1 + percentDefense);
+        const totalDefense = Math.max(0, Math.floor(calculatedDefense));
         const reducedDamage = Math.max(1, damage - Math.floor(totalDefense / 2));
+        
         this.health.current = Math.max(0, this.health.current - reducedDamage);
+
+        // Sauvegarde silencieuse de l'inventaire
+        if (this.inventory && typeof this.inventory.save === "function") {
+            this.inventory.save(items); 
+        }
 
         return {
             reducedDamage,

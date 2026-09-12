@@ -77,12 +77,11 @@ export default class EnemyManager {
         const gold = Math.max(1, Math.round(base.gold * scale * (isElite ? 2.0 : 1.0) * randomFactor()));
 
         if (isElite) {
-            this.logger.info(`⚡ Elite enemy spawned: ${enemyName} (Level ${playerLevel}) with ${health} HP!`);
+            this.logger.info(`Elite enemy spawned: ${enemyName} (Lv. ${playerLevel}, ${health} HP).`);
         } else {
             this.logger.debug(`Spawned enemy: ${enemyName} (Type: ${type}, Level: ${playerLevel}, HP: ${health})`);
         }
 
-        // Assure-toi que la classe Enemy accepte aussi 'gold' en paramètre (ex: new Enemy(type, enemyName, health, health, strength, defense, experience, gold))
         return new Enemy(type, enemyName, health, health, strength, defense, experience, gold);
     }
 }

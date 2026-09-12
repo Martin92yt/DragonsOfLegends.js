@@ -170,10 +170,15 @@ export default class PlayerManager {
 
         for (const [id, player] of this.players.entries()) {
             this.save(player);
+            
+            // Sécurise la sauvegarde de l'inventaire de chaque joueur actif
+            if (player.inventory && typeof player.inventory.save === "function") {
+                player.inventory.save();
+            }
+
             this.clearUnloadTimer(id);
         }
 
-        InventoryEntity.save();
-        this.logger.info("Tous les joueurs actifs ont été sauvegardés avec succès.");
+        this.logger.info("Tous les joueurs actifs et leurs inventaires ont été sauvegardés avec succès.");
     }
 }

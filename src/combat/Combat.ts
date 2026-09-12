@@ -57,51 +57,82 @@ export default class Combat {
         };
     }
 
-private getPlayerDamage(): number {
-    // 1. Calcul de la stat de base selon la classe
-    const statMap: Record<string, number> = { 
-        warrior: this.player.attributes.strength, 
-        explorer: this.player.attributes.agility, 
-        mage: this.player.attributes.intelligence 
-    };
-    const baseStat = statMap[this.player.classId] ?? this.player.attributes.strength;
-    
-    // Dégâts bruts de base + aléas (ex: jet de dé)
-    let totalDamage = baseStat + Math.floor(Math.random() * 6) - 2;
-
-    // 2. Récupération des bonus/malus d'équipement
-    if (this.player.inventory && typeof this.player.inventory.getItems === "function") {
-        const items = this.player.inventory.getItems();
-        const equippedItems = items.filter((i: any) => i.isEquipped);
+    private getPlayerDamage(): number {
+        // 1. Calcul de la stat de base selon la classe
+        const statMap: Record<string, number> = { 
+            warrior: this.player.attributes.strength, 
+            explorer: this.player.attributes.agility, 
+            mage: this.player.attributes.intelligence 
+        };
+        const baseStat = statMap[this.player.classId] ?? this.player.attributes.strength;
         
-        let flatBonus = 0;
-        let percentageBonus = 0; // Ex: 0.016 pour +1.6% ou -0.008 pour -0.8%
+        const roll = Math.floor(Math.random() * 6) - 2;
+        let totalDamage = baseStat + roll;
 
-        for (const item of equippedItems) {
-            if (item.data) {
-                // Dégâts additionnels bruts (ex: +5)
-                if (typeof item.data.flatDamage === "number") {
-                    flatBonus += item.data.flatDamage;
+        // 2. Récupération des bonus/malus d'équipement
+        let flatBonus = 0;
+        let percentageBonus = 0;
+
+        if (this.player.inventory && typeof this.player.inventory.getItems === "function") {
+            const items = this.player.inventory.getItems();
+            const equippedItems = items.filter((i: any) => i.isEquipped);
+
+            for (const item of equippedItems) {
+                if (item.data) {
+                    let contributesToAttack = false;
+
+                    const rawDmgBonus = (item.data as any).damageBonus ?? (item.data as any).flatDamage;
+                    if (typeof rawDmgBonus === "number") {
+                        flatBonus += rawDmgBonus;
+                        contributesToAttack = true;
+                        this.logger.debug(`➕ [${item.name}] Bonus dégâts : +${rawDmgBonus}`);
+                    }
+                    
+                    const rawPctBonus = (item.data as any).damageBonusPercent;
+                    if (typeof rawPctBonus === "number") {
+                        percentageBonus += rawPctBonus / 100;
+                        contributesToAttack = true;
+                        this.logger.debug(`➕ [${item.name}] Bonus % dégâts : +${rawPctBonus}%`);
+                    }
+
+                    // USURE
+                    if (contributesToAttack && item.data.durability !== undefined && item.data.durability > 0) {
+                        const rarityMultipliers: Record<string, number> = {
+                            common: 1.5,
+                            uncommon: 1.2,
+                            rare: 1.0,
+                            epic: 0.7,
+                            legendary: 0.3
+                        };
+                        const mult = rarityMultipliers[item.rarity?.toLowerCase()] ?? 1.0;
+                        const durabilityLoss = Math.max(1, Math.floor(1 * mult));
+                        const oldDurability = item.data.durability;
+
+                        item.data.durability = Math.max(0, item.data.durability - durabilityLoss);
+                        this.logger.debug(`🔨 [${item.name}] Usure : ${oldDurability} ➔ ${item.data.durability}`);
+
+                        if (item.data.durability === 0) {
+                            this.logger.debug(`⚠️ [${item.name}] L'équipement est cassé !`);
+                        }
+                    }
                 }
-                
-                // Dégâts en pourcentage (ex: 1.6 pour 1.6% ou -0.8 pour -0.8%)
-                // On divise par 100 pour transformer le pourcentage en multiplicateur (1.6% -> 0.016)
-                if (typeof item.data.damageBonusPercent === "number") {
-                    percentageBonus += item.data.damageBonusPercent / 100;
-                }
+            }
+
+            totalDamage += flatBonus;
+            totalDamage = totalDamage * (1 + percentageBonus);
+
+            if (this.player.inventory && typeof this.player.inventory.save === "function") {
+                this.player.inventory.save(items); 
             }
         }
 
-        // Application des bonus bruts
-        totalDamage += flatBonus;
+        const finalDamage = Math.max(1, Math.floor(totalDamage));
 
-        // Application des bonus/malus en pourcentage (ex: 1 + 0.016 = 1.016 ou 1 - 0.008 = 0.992)
-        totalDamage = totalDamage * (1 + percentageBonus);
+        // Log unique condensé
+        this.logger.debug(`${this.player.name} attack: base=${baseStat}, roll=${roll}, equipment=+${flatBonus} (+${percentageBonus * 100}%), final=${finalDamage}.`);
+
+        return finalDamage;
     }
-
-    // 3. Retourne les dégâts finaux (minimum 1)
-    return Math.max(1, Math.floor(totalDamage));
-}
 
     public isFinished(): boolean { 
         return !this.player.isAlive() || !this.enemy.isAlive(); 
