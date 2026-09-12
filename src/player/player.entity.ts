@@ -56,21 +56,52 @@ export default class PlayerEntity {
         this.logger.debug(`Player entity initialized for ${this.name} (ID: ${this.id}).`);
     }
 
-    public async moveTo(destinationId: string): Promise<ExplorationResult> {
+public async moveTo(
+        destinationId: string, 
+        distance: number = 1, 
+        danger: number = 1
+    ): Promise<ExplorationResult> {
         // 🔒 Bloqué si déjà en voyage ou en plein combat
         if (this.isTravelling) throw new PlayerAlreadyTravellingError();
         if (this.inCombat) throw new MoveInCombatError();
         
-        this.logger.debug(`${this.name} travelling to ${destinationId}.`);
+        this.logger.debug(`${this.name} travelling to ${destinationId} (distance: ${distance}, danger: ${danger}).`);
         this.isTravelling = true;
         
-        const travelTimeMs = Math.floor(Math.random() * 4001) + 1000;
+        // Configuration des multiplicateurs et valeurs de base
+        const BASE_TRAVEL_MS = 1000;         // 1 seconde de base minimum
+        const TRAVEL_MULTIPLIER = 1000;      // 1 de distance = +1 seconde
+        
+        const BASE_AMBUSH_CHANCE = 0.15;     // 15% de base
+        const DANGER_MULTIPLIER = 0.05;      // Chaque point de danger ajoute +5% de chance d'embuscade
+
+        // 1. Calculs intermédiaires pour les logs demandés
+        const randomBaseTime = Math.floor(Math.random() * 2001); // 0 à 2 secondes aléatoires
+        
+        // Temps sans distance et sans multiplicateur
+        const timeWithoutDistanceAndMultiplier = randomBaseTime + BASE_TRAVEL_MS;
+        
+        // Temps avec la distance (en considérant un multiplicateur neutre de 1, ou en isolant la formule distance * BASE_VALUE)
+        const timeWithDistanceOnly = timeWithoutDistanceAndMultiplier + (distance * 1);
+
+        // Temps réel complet avec le TRAVEL_MULTIPLIER
+        let travelTimeMs = timeWithoutDistanceAndMultiplier + ((distance * 1) * TRAVEL_MULTIPLIER);
+        
+        // Calcul dynamique du taux d'embuscade en fonction du danger
+        const ambushChance = Math.min(BASE_AMBUSH_CHANCE + (danger * DANGER_MULTIPLIER), 0.90); // Plafonné à 90% max
+        const willBeAmbushed = Math.random() < ambushChance;
+
+        // Si une embuscade est prévue, le voyage est interrompu en chemin (le temps est divisé par 2.1)
+        if (willBeAmbushed) {
+            travelTimeMs = Math.floor(travelTimeMs / 2.1);
+        }
+
         await new Promise((resolve) => setTimeout(resolve, travelTimeMs));
         this.isTravelling = false;
 
-        // 30% de chance d'embuscade
-        if (Math.random() < 0.30) {
-            this.logger.info(`Ambush! ${this.name} was attacked on the road to ${destinationId}.`);
+        // Gestion de l'embuscade
+        if (willBeAmbushed) {
+            this.logger.info(`Ambush! ${this.name} was attacked on the road to ${destinationId} (Danger: ${danger}).`);
             
             const isWaterArea = /water|sea|ocean|lake|riviere|lac|eau/i.test(destinationId);
             let chosenEnemyType: EnemyType;
@@ -102,7 +133,7 @@ export default class PlayerEntity {
         }
 
         this.location = destinationId;
-        this.logger.debug(`${this.name} arrived at ${destinationId}.`);
+        this.logger.debug(`${this.name} arrived at ${destinationId} in ${travelTimeMs}ms.`);
         return { arrived: true, attacked: false, travelTimeMs, locationId: this.location };
     }
 

@@ -7,7 +7,7 @@ import OfficialMap from "./location/official-map.js";
 import { EnemyType } from "./enemy/enemy.type.js";
 import { Logger } from "./utils/logger.js";
 import { PlayerNoCharacterError, SelfCombatError } from "./types/error.js";
-import { EquipmentSlot } from "./inventory/item.enum.js"
+import type { EquipmentSlot } from "./inventory/item.enum.js"
 
 const logger = new Logger({ context: "World" });
 

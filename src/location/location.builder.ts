@@ -6,14 +6,16 @@ import { LocationIdEmptyError } from "../types/error.js";
 export interface ConnectionInput {
     transport: "land" | "boat";
     targetId: string;
+    distance?: number;
+    danger?: number;
 }
 
 export class LocationBuilder {
     private id: string = "";
     private type: LocationType = LocationType.City; // Valeur par défaut
     private flags: LocationFlags | LocationFlags[] = LocationFlags.None;
-    private landConnections: string[] = [];
-    private boatConnections: string[] = [];
+    private landConnections: Array<{ targetId: string; distance: number; danger: number }> = [];
+    private boatConnections: Array<{ targetId: string; distance: number; danger: number }> = [];
 
     constructor(id: string) {
         this.id = id;
@@ -48,13 +50,16 @@ export class LocationBuilder {
 
     public addConnections(...connections: ConnectionInput[]): this {
         for (const conn of connections) {
+            const distance = conn.distance ?? 1;
+            const danger = conn.danger ?? 0;
+
             if (conn.transport === "land") {
-                if (!this.landConnections.includes(conn.targetId)) {
-                    this.landConnections.push(conn.targetId);
+                if (!this.landConnections.some(c => c.targetId === conn.targetId)) {
+                    this.landConnections.push({ targetId: conn.targetId, distance, danger });
                 }
             } else if (conn.transport === "boat") {
-                if (!this.boatConnections.includes(conn.targetId)) {
-                    this.boatConnections.push(conn.targetId);
+                if (!this.boatConnections.some(c => c.targetId === conn.targetId)) {
+                    this.boatConnections.push({ targetId: conn.targetId, distance, danger });
                 }
             }
         }
@@ -62,12 +67,12 @@ export class LocationBuilder {
     }
 
     // Raccourcis pratiques
-    public linkLand(targetId: string): this {
-        return this.addConnections({ transport: "land", targetId });
+    public linkLand(targetId: string, distance?: number, danger?: number): this {
+        return this.addConnections({ transport: "land", targetId, distance, danger });
     }
 
-    public linkBoat(targetId: string): this {
-        return this.addConnections({ transport: "boat", targetId });
+    public linkBoat(targetId: string, distance?: number, danger?: number): this {
+        return this.addConnections({ transport: "boat", targetId, distance, danger });
     }
 
     // Transforme l'objet en paramètres bruts acceptés par le manager

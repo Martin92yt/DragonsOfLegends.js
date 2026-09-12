@@ -40,12 +40,17 @@ export default class LocationManager {
         return location;
     }
 
-    public link(fromId: string, toId: string, transport: "land" | "boat"): void {
+    public link(fromId: string, toId: string, transport: "land" | "boat", distance = 1, danger = 0): void {
         const from = this.locations.get(fromId), to = this.locations.get(toId);
         if (!from || !to) throw new LocationInexistentLinkError(fromId, toId);
-        if (!from.connections[transport].includes(toId)) from.connections[transport].push(toId);
-        if (!to.connections[transport].includes(fromId)) to.connections[transport].push(fromId);
-        this.logger.debug(`Linked locations via ${transport}: ${fromId} <-> ${toId}`);
+        
+        if (!from.connections[transport].some(c => c.targetId === toId)) {
+            from.connections[transport].push({ targetId: toId, distance, danger });
+        }
+        if (!to.connections[transport].some(c => c.targetId === fromId)) {
+            to.connections[transport].push({ targetId: fromId, distance, danger });
+        }
+        this.logger.debug(`Linked locations via ${transport}: ${fromId} <-> ${toId} (distance: ${distance}, danger: ${danger})`);
     }
 
     public get(id: string): LocationCreateResult | undefined { return this.locations.get(id); }
@@ -77,11 +82,15 @@ export default class LocationManager {
     private validateConnections(): void {
         for (const loc of this.locations.values()) {
             for (const mode of ["land", "boat"] as const) {
-                for (const destId of loc.connections[mode]) {
+                for (const conn of loc.connections[mode]) {
+                    const destId = conn.targetId;
                     if (destId === loc.id) throw new SelfConnectionError(loc.id, mode);
                     const dest = this.locations.get(destId);
                     if (!dest) throw new InvalidConnectionTargetError(loc.id, mode, destId);
-                    if (!dest.connections[mode].includes(loc.id)) throw new NonReciprocalConnectionError(mode, loc.id, dest.id);
+                    
+                    const hasReciprocal = dest.connections[mode].some(c => c.targetId === loc.id);
+                    if (!hasReciprocal) throw new NonReciprocalConnectionError(mode, loc.id, dest.id);
+                    
                     if (mode === "boat" && (!hasFlag(loc.flags, LocationFlags.OnWater) || !hasFlag(dest.flags, LocationFlags.OnWater))) {
                         throw new BoatWaterFlagRequiredError(loc.id, destId);
                     }
@@ -94,7 +103,8 @@ export default class LocationManager {
         const visited = new Set<string>([startId]), queue: string[] = [startId];
         while (queue.length > 0) {
             const curr = this.locations.get(queue.shift()!)!;
-            for (const neighbor of [...curr.connections.land, ...curr.connections.boat]) {
+            for (const conn of [...curr.connections.land, ...curr.connections.boat]) {
+                const neighbor = conn.targetId;
                 if (!visited.has(neighbor)) { visited.add(neighbor); queue.push(neighbor); }
             }
         }

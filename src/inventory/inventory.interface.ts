@@ -1,4 +1,4 @@
-import { ItemCategory, ItemRarity, ItemType } from "./item.enum.js";
+import { ItemCategory, ItemRarity } from "./item.enum.js";
 
 export interface ItemNBT {
     damageBonus?: number;       // Ex: +0.1 (pour 0.1% ou 0.1 flat selon ton calcul)
@@ -12,7 +12,7 @@ export interface ItemNBT {
  * Définition complète d'un item (ses propriétés de base, son nom, sa rareté, etc.)
  */
 export interface Item {
-    itemId: ItemType | string;
+    itemId: string;
     name: string;
     category: ItemCategory;
     rarity: ItemRarity;
@@ -24,13 +24,13 @@ export interface Item {
 export type ItemDefinition = Item;
 
 export interface AddItemParameters {
-    type: ItemType | string;
+    type: string;
     number: number;
     data?: ItemNBT;
 }
 
 export interface RemoveItemParameters {
-    type: ItemType | string;
+    type: string;
     number: number;
 }
 

@@ -1,16 +1,22 @@
 import { LocationFlags } from "./location.flags.js";
 import { LocationType } from "./location.type.js";
 
+export interface LocationConnectionRecord {
+    targetId: string;
+    distance: number;
+    danger: number;
+}
+
 export interface LocationConnection { 
-    land: string[]; 
-    boat: string[]; 
+    land: LocationConnectionRecord[]; 
+    boat: LocationConnectionRecord[]; 
 }
 
 export interface LocationCreateParametres {
     id: string;
     type: LocationType;
-    flags?: LocationFlags | LocationFlags[];
-    connections?: Partial<LocationConnection>;
+    flags: LocationFlags | LocationFlags[];
+    connections: LocationConnection;
 }
 
 export interface LocationCreateResult {
