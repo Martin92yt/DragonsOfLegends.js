@@ -8,7 +8,7 @@ export enum LogLevel {
 
 export interface LoggerOptions {
     context?: string;
-    enabled?: boolean; // Permet de désactiver un logger si besoin
+    enabled?: boolean;
 }
 
 const Colors = {
@@ -28,75 +28,121 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
     [LogLevel.INFO]: Colors.info,
     [LogLevel.WARN]: Colors.warn,
     [LogLevel.ERROR]: Colors.error,
-    [LogLevel.FATAL]: Colors.fatal,
+    [LogLevel.FATAL]: Colors.fatal
 };
 
-const LOG_METHODS: Record<LogLevel, "debug" | "info" | "warn" | "error"> = {
-    [LogLevel.DEBUG]: "debug",
-    [LogLevel.INFO]: "info",
-    [LogLevel.WARN]: "warn",
-    [LogLevel.ERROR]: "error",
-    [LogLevel.FATAL]: "error",
+const LOG_METHODS: Record<LogLevel, (message?: unknown, ...args: unknown[]) => void> = {
+    [LogLevel.DEBUG]: console.debug,
+    [LogLevel.INFO]: console.info,
+    [LogLevel.WARN]: console.warn,
+    [LogLevel.ERROR]: console.error,
+    [LogLevel.FATAL]: console.error
 };
 
 export class Logger {
     private readonly context?: string;
     private readonly enabled: boolean;
 
-    constructor(options: LoggerOptions = {}) {
+    /**
+     * Creates a new logger instance.
+     *
+     * @param options Logger configuration options.
+     */
+    public constructor(options: LoggerOptions = {}) {
         this.context = options.context;
         this.enabled = options.enabled ?? true;
     }
 
-    public debug(msg: string, ...args: unknown[]): void {
-        this.log(LogLevel.DEBUG, msg, ...args);
+    /**
+     * Logs a debug message.
+     *
+     * @param message Message to log.
+     * @param args Additional values to display.
+     */
+    public debug(message: string, ...args: unknown[]): void {
+        this.log(LogLevel.DEBUG, message, ...args);
     }
 
-    public info(msg: string, ...args: unknown[]): void {
-        this.log(LogLevel.INFO, msg, ...args);
+    /**
+     * Logs an informational message.
+     *
+     * @param message Message to log.
+     * @param args Additional values to display.
+     */
+    public info(message: string, ...args: unknown[]): void {
+        this.log(LogLevel.INFO, message, ...args);
     }
 
-    public warn(msg: string, ...args: unknown[]): void {
-        this.log(LogLevel.WARN, msg, ...args);
+    /**
+     * Logs a warning message.
+     *
+     * @param message Message to log.
+     * @param args Additional values to display.
+     */
+    public warn(message: string, ...args: unknown[]): void {
+        this.log(LogLevel.WARN, message, ...args);
     }
 
-    public error(msg: string, ...args: unknown[]): void {
-        this.log(LogLevel.ERROR, msg, ...args);
+    /**
+     * Logs an error message.
+     *
+     * @param message Message to log.
+     * @param args Additional values to display.
+     */
+    public error(message: string, ...args: unknown[]): void {
+        this.log(LogLevel.ERROR, message, ...args);
     }
 
-    public fatal(msg: string, ...args: unknown[]): void {
-        this.log(LogLevel.FATAL, msg, ...args);
+    /**
+     * Logs a fatal error message.
+     *
+     * @param message Message to log.
+     * @param args Additional values to display.
+     */
+    public fatal(message: string, ...args: unknown[]): void {
+        this.log(LogLevel.FATAL, message, ...args);
     }
 
+    /**
+     * Prints an empty line when logging is enabled.
+     *
+     * @returns Nothing.
+     */
     public blank(): void {
-        if (this.enabled) console.log("");
+        if (this.enabled) {
+            console.log("");
+        }
     }
 
+    /**
+     * Logs a message at the specified level.
+     *
+     * @param level Log level.
+     * @param message Message to log.
+     * @param args Additional values to display.
+     * @returns Nothing.
+     */
     private log(level: LogLevel, message: string, ...args: unknown[]): void {
-        if (!this.enabled) return;
+        if (!this.enabled) {
+            return;
+        }
 
-        // 🛑 Ignore les logs DEBUG si ENVIRONMENT n'est pas réglé sur "debug"
         if (level === LogLevel.DEBUG && process.env.ENVIRONMENT !== "debug") {
             return;
         }
 
-        const time = new Date().toLocaleTimeString("fr-FR", {
+        const time = new Date().toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit"
         });
 
-        const timeStr = `${Colors.timestamp}[${time}]${Colors.reset}`;
-        const levelStr = `${LEVEL_COLORS[level]}${level.padEnd(5)}${Colors.reset}`;
-        const ctxStr = this.context ? ` ${Colors.context}[${this.context}]${Colors.reset}` : "";
-        
-        const output = `${timeStr} ${levelStr}${ctxStr} — ${Colors.message}${message}${Colors.reset}`;
-        const method = LOG_METHODS[level];
+        const timestamp = `${Colors.timestamp}[${time}]${Colors.reset}`;
+        const levelLabel = `${LEVEL_COLORS[level]}${level.padEnd(5)}${Colors.reset}`;
+        const context = this.context ? ` ${Colors.context}[${this.context}]${Colors.reset}` : "";
+        const output = `${timestamp} ${levelLabel}${context} — ${Colors.message}${message}${Colors.reset}`;
+        const logMethod = LOG_METHODS[level];
 
-        if (args.length > 0) {
-            console[method](output, ...args);
-        } else {
-            console[method](output);
-        }
+        logMethod(output, ...args);
     }
 }

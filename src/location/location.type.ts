@@ -1,10 +1,11 @@
 export enum LocationType {
     City = "city",
     Village = "village",
-    Dungeon = "dungeon",
+    Dungeon = "dungeon"
 }
 
 export type LocationTypeId = `${LocationType}`;
 
-export const isLocationType = (value: string): value is LocationType => 
-    Object.values(LocationType).includes(value as LocationType);
+export const isLocationType = (value: unknown): value is LocationType => {
+    return typeof value === "string" && Object.values(LocationType).includes(value as LocationType);
+};

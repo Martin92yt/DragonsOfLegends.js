@@ -1,7 +1,7 @@
 {
   "name": "dragons-of-legends.js",
-  "version": "0.0.1",
-  "description": "A modular TypeScript framework for building multiplayer RPG and MMORPG experiences.",
+  "version": "0.1.0-alpha.1",
+  "description": "A powerful TypeScript library for creating text-based RPGs, inventory systems, and adventure mechanics.",
   "homepage": "https://github.com/Martin92yt/DragonsOfLegends.js#readme",
   "bugs": {
     "url": "https://github.com/Martin92yt/DragonsOfLegends.js/issues"

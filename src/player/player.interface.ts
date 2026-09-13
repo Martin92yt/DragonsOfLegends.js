@@ -1,6 +1,5 @@
 import { PlayerClass } from "./player.class.js";
 
-// --- Base Database & Transport Data ---
 export interface PlayerData {
     id: string;
     name: string;
@@ -26,7 +25,6 @@ export interface CreatePlayerOptions {
     locationId: string;
 }
 
-// --- Status & Counts ---
 export interface PlayerCount {
     active: number;
     total: number;
@@ -39,16 +37,15 @@ export interface ClassStats {
     defense: number;
 }
 
-// --- Entity Sub-Structures ---
 export interface PlayerHealth {
     current: number;
     max: number;
-} 
+}
 
 export interface PlayerExperience {
     current: number;
     required: number;
-} 
+}
 
 export interface PlayerAttributes {
     points: number;
@@ -58,7 +55,6 @@ export interface PlayerAttributes {
     defense: number;
 }
 
-// --- Snapshots ---
 export interface PlayerSnapshot {
     id: string;
     name: string;

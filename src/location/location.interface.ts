@@ -7,21 +7,21 @@ export interface LocationConnectionRecord {
     danger: number;
 }
 
-export interface LocationConnection { 
-    land: LocationConnectionRecord[]; 
-    boat: LocationConnectionRecord[]; 
+export interface LocationConnection {
+    land: LocationConnectionRecord[];
+    boat: LocationConnectionRecord[];
 }
 
 export interface LocationCreateParametres {
-    id: string;
-    type: LocationType;
-    flags: LocationFlags | LocationFlags[];
-    connections: LocationConnection;
+    readonly id: string;
+    readonly type: LocationType;
+    readonly flags: LocationFlags | LocationFlags[];
+    readonly connections: LocationConnection;
 }
 
 export interface LocationCreateResult {
-    id: string;
-    type: LocationType;
+    readonly id: string;
+    readonly type: LocationType;
     flags: LocationFlags;
     connections: LocationConnection;
 }

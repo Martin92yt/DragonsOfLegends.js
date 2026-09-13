@@ -1,84 +1,115 @@
 import Database from "better-sqlite3";
 import { Logger } from "../utils/logger.js";
 import { EquipmentRecord, InventoryItemRecord } from "./inventory.interface.js";
-import { EquipmentSlot } from "./item.enum.js";
+import { EquipmentSlot, ItemCategory, ItemRarity, VALID_EQUIPMENT_SLOTS } from "./item.enum.js";
+
+interface InventoryRow {
+    playerId: string;
+    itemId: string;
+    quantity: number;
+    nbt: string | null;
+    name: string;
+    category: string;
+    rarity: string;
+    maxStack: number;
+    description: string | null;
+    isEquipped: number;
+    equipmentSlot: string | null;
+}
+
+interface EquipmentRow {
+    equipmentSlot: EquipmentSlot;
+    itemId: string;
+}
+
+type EquipmentKey = Exclude<keyof EquipmentRecord, "playerId">;
 
 export default class InventoryDatabase {
-    private readonly logger = new Logger({ context: "InventoryDatabase" });
+    readonly #logger = new Logger({ context: "InventoryDatabase" });
     private readonly database: Database.Database;
 
-    constructor() {
+    /**
+     * Creates and initializes the inventory database.
+     */
+    public constructor() {
         this.database = new Database("./data/inventory.db");
         this.database.pragma("foreign_keys = ON");
         this.createTables();
-        this.logger.info("Inventory database initialized successfully.");
+        this.#logger.info("Inventory database initialized successfully.");
     }
 
+    /**
+     * Retrieves all inventory items for a player.
+     *
+     * @param playerId Player identifier.
+     * @returns The player's inventory items.
+     */
     public getPlayerInventory(playerId: string): InventoryItemRecord[] {
-        const rows = this.database
-            .prepare(
-                `
-                SELECT playerId, itemId, quantity, nbt, name, category, rarity, maxStack, description, isEquipped, equipmentSlot 
-                FROM Inventory 
-                WHERE playerId = ?
-            `,
-            )
-            .all(playerId) as Array<any>;
+        const rows = this.database.prepare(`
+            SELECT playerId, itemId, quantity, nbt, name, category, rarity, maxStack, description, isEquipped, equipmentSlot
+            FROM Inventory
+            WHERE playerId = ?
+        `).all(playerId) as InventoryRow[];
 
-        return rows.map((row) => ({
+        return rows.map((row): InventoryItemRecord => ({
             playerId: row.playerId,
             itemId: row.itemId,
             quantity: row.quantity,
-            data: row.nbt ? JSON.parse(row.nbt) : null,
-            name: row.name ?? "Unknown Item",
-            category: row.category ?? "misc",
-            rarity: row.rarity ?? "common",
-            maxStack: row.maxStack ?? 64,
+            data: this.parseNBT(row.nbt),
+            name: row.name || "Unknown Item",
+            category: this.parseCategory(row.category),
+            rarity: this.parseRarity(row.rarity),
+            maxStack: row.maxStack,
             description: row.description ?? undefined,
-            isEquipped: Boolean(row.isEquipped),
-            equipmentSlot: row.equipmentSlot ?? null,
+            isEquipped: row.isEquipped === 1,
+            equipmentSlot: this.parseEquipmentSlot(row.equipmentSlot)
         }));
     }
 
-    public savePlayerInventory(
-        playerId: string,
-        items: InventoryItemRecord[],
-    ): void {
+    /**
+     * Saves all inventory items for a player.
+     *
+     * @param playerId Player identifier.
+     * @param items Inventory items to save.
+     */
+    public savePlayerInventory(playerId: string, items: InventoryItemRecord[]): void {
         const transaction = this.database.transaction(() => {
-            this.database
-                .prepare(`DELETE FROM Inventory WHERE playerId = ?`)
-                .run(playerId);
+            this.database.prepare("DELETE FROM Inventory WHERE playerId = ?").run(playerId);
 
-            const insertStmt = this.database.prepare(`
-                INSERT INTO Inventory (playerId, itemId, quantity, nbt, name, category, rarity, maxStack, description, isEquipped, equipmentSlot)
+            const statement = this.database.prepare(`
+                INSERT INTO Inventory (
+                    playerId,
+                    itemId,
+                    quantity,
+                    nbt,
+                    name,
+                    category,
+                    rarity,
+                    maxStack,
+                    description,
+                    isEquipped,
+                    equipmentSlot
+                )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
             for (const item of items) {
-                const itemId = item.itemId || (item as any).id;
-                if (!itemId) continue;
-
-                // 1. Sécurisation de la catégorie (si c'est un tableau, on prend le premier élément ou "misc")
-                let categoryValue = item.category ?? "misc";
-                if (Array.isArray(categoryValue)) {
-                    categoryValue = categoryValue[0] ?? "misc";
+                if (!item.itemId || item.quantity <= 0) {
+                    continue;
                 }
 
-                // 2. Récupération propre des données NBT (cherche dans item.nbt ou item.data)
-                const nbtData = (item as any).nbt ?? item.data;
-
-                insertStmt.run(
+                statement.run(
                     playerId,
-                    itemId,
-                    item.quantity ?? 1,
-                    nbtData ? JSON.stringify(nbtData) : null,
+                    item.itemId,
+                    item.quantity,
+                    item.data ? JSON.stringify(item.data) : null,
                     item.name || "Unknown Item",
-                    categoryValue,
-                    item.rarity || "common",
+                    item.category,
+                    item.rarity,
                     item.maxStack ?? 64,
                     item.description ?? null,
                     item.isEquipped ? 1 : 0,
-                    item.equipmentSlot ?? null,
+                    item.equipmentSlot ?? null
                 );
             }
         });
@@ -86,19 +117,31 @@ export default class InventoryDatabase {
         transaction();
     }
 
+    /**
+     * Clears all inventory items for a player.
+     *
+     * @param playerId Player identifier.
+     * @returns Whether any inventory item was deleted.
+     */
     public clearInventory(playerId: string): boolean {
-        const result = this.database
-            .prepare(`DELETE FROM Inventory WHERE playerId = ?`)
-            .run(playerId);
+        const result = this.database.prepare("DELETE FROM Inventory WHERE playerId = ?").run(playerId);
         return result.changes > 0;
     }
 
+    /**
+     * Retrieves the equipment currently equipped by a player.
+     *
+     * @param playerId Player identifier.
+     * @returns The player's equipment.
+     */
     public getPlayerEquipment(playerId: string): EquipmentRecord {
-        const rows = this.database
-            .prepare(
-                `SELECT equipmentSlot, itemId FROM Inventory WHERE playerId = ? AND isEquipped = 1 AND equipmentSlot IS NOT NULL`,
-            )
-            .all(playerId) as Array<{ equipmentSlot: string; itemId: string }>;
+        const rows = this.database.prepare(`
+            SELECT equipmentSlot, itemId
+            FROM Inventory
+            WHERE playerId = ?
+            AND isEquipped = 1
+            AND equipmentSlot IS NOT NULL
+        `).all(playerId) as EquipmentRow[];
 
         const equipment: EquipmentRecord = {
             playerId,
@@ -110,18 +153,44 @@ export default class InventoryDatabase {
             shield: null,
             amulet1: null,
             amulet2: null,
-            amulet3: null,
+            amulet3: null
         };
 
         for (const row of rows) {
-            if (row.equipmentSlot in equipment) {
-                (equipment as any)[row.equipmentSlot] = row.itemId;
-            }
+            equipment[row.equipmentSlot] = row.itemId;
         }
 
         return equipment;
     }
 
+    /**
+     * Saves the current database state.
+     *
+     * SQLite automatically persists committed transactions.
+     */
+    public save(): void {
+        this.database.pragma("optimize");
+    }
+
+    /**
+     * Saves and closes the database connection.
+     */
+    public saveAndClose(): void {
+        if (!this.database.open) {
+            return;
+        }
+
+        try {
+            this.database.close();
+            this.#logger.info("Inventory database successfully saved and closed.");
+        } catch (error) {
+            this.#logger.error("Error while closing inventory database:", error);
+        }
+    }
+
+    /**
+     * Creates the inventory database tables.
+     */
     private createTables(): void {
         this.database.exec(`
             CREATE TABLE IF NOT EXISTS Inventory (
@@ -141,25 +210,51 @@ export default class InventoryDatabase {
         `);
     }
 
-    public saveAndClose(): void {
+    /**
+     * Parses serialized item data.
+     *
+     * @param value Serialized NBT data.
+     * @returns Parsed NBT data or null.
+     */
+    private parseNBT(value: string | null): InventoryItemRecord["data"] {
+        if (!value) {
+            return null;
+        }
+
         try {
-            if (this.database && this.database.open) {
-                this.database.close();
-                this.logger.info("Inventory database successfully saved and closed.");
-            }
-        } catch (error) {
-            this.logger.error(
-                "Error while saving and closing inventory database:",
-                error,
-            );
+            return JSON.parse(value);
+        } catch {
+            return null;
         }
     }
 
-    public save(): void {
-        try {
-            this.database.open;
-        } catch (error) {
-            this.logger.error("Error while saving inventory database:", error);
-        }
+    /**
+     * Parses an item category.
+     *
+     * @param value Database category value.
+     * @returns A valid item category.
+     */
+    private parseCategory(value: string): ItemCategory {
+        return Object.values(ItemCategory).includes(value as ItemCategory) ? value as ItemCategory : ItemCategory.Valuables;
+    }
+
+    /**
+     * Parses an item rarity.
+     *
+     * @param value Database rarity value.
+     * @returns A valid item rarity.
+     */
+    private parseRarity(value: string): ItemRarity {
+        return Object.values(ItemRarity).includes(value as ItemRarity) ? value as ItemRarity : ItemRarity.Common;
+    }
+
+    /**
+     * Parses an equipment slot.
+     *
+     * @param value Database equipment slot value.
+     * @returns A valid equipment slot or null.
+     */
+    private parseEquipmentSlot(value: string | null): EquipmentSlot | null {
+        return value && (VALID_EQUIPMENT_SLOTS as readonly string[]).includes(value) ? (value as EquipmentSlot) : null;
     }
 }

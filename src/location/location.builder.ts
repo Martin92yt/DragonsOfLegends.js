@@ -1,90 +1,151 @@
 import { LocationFlags } from "./location.flags.js";
-import { LocationType } from "./location.type.js"; // Adapte le chemin selon ton projet
-import { LocationCreateParametres } from "./location.interface.js";
+import { LocationType } from "./location.type.js";
+import { LocationConnectionRecord, LocationCreateParametres } from "./location.interface.js";
 import { LocationIdEmptyError } from "../types/error.js";
 
+export type TransportMode = "land" | "boat";
+
 export interface ConnectionInput {
-    transport: "land" | "boat";
-    targetId: string;
-    distance?: number;
-    danger?: number;
+    readonly transport: TransportMode;
+    readonly targetId: string;
+    readonly distance?: number;
+    readonly danger?: number;
 }
 
 export class LocationBuilder {
-    private id: string = "";
-    private type: LocationType = LocationType.City; // Valeur par défaut
+    private readonly id: string;
+    private type: LocationType = LocationType.City;
     private flags: LocationFlags | LocationFlags[] = LocationFlags.None;
-    private landConnections: Array<{ targetId: string; distance: number; danger: number }> = [];
-    private boatConnections: Array<{ targetId: string; distance: number; danger: number }> = [];
+    private landConnections: LocationConnectionRecord[] = [];
+    private boatConnections: LocationConnectionRecord[] = [];
 
-    constructor(id: string) {
+    /**
+     * Creates a location builder.
+     *
+     * @param id Location identifier.
+     */
+    public constructor(id: string) {
         this.id = id;
     }
 
+    /**
+     * Sets the location type.
+     *
+     * @param type Location type.
+     * @returns The current builder.
+     */
     public setType(type: LocationType): this {
         this.type = type;
         return this;
     }
 
+    /**
+     * Sets the location flags.
+     *
+     * @param flags Location flags.
+     * @returns The current builder.
+     */
     public setFlags(flags: LocationFlags | LocationFlags[]): this {
         this.flags = flags;
         return this;
     }
 
-    // Permet d'ajouter des flags un par un ou par lots
+    /**
+     * Adds a location flag.
+     *
+     * @param flag Flag to add.
+     * @returns The current builder.
+     */
     public addFlag(flag: LocationFlags): this {
         if (Array.isArray(this.flags)) {
-            if (!this.flags.includes(flag)) this.flags.push(flag);
+            if (!this.flags.includes(flag)) {
+                this.flags.push(flag);
+            }
         } else {
             this.flags = [this.flags, flag];
         }
+
         return this;
     }
 
-    // Accepte une ou plusieurs connexions d'un coup
+    /**
+     * Replaces all existing connections.
+     *
+     * @param connections Connections to set.
+     * @returns The current builder.
+     */
     public setConnections(...connections: ConnectionInput[]): this {
         this.landConnections = [];
         this.boatConnections = [];
         return this.addConnections(...connections);
     }
 
+    /**
+     * Adds one or more connections.
+     *
+     * @param connections Connections to add.
+     * @returns The current builder.
+     */
     public addConnections(...connections: ConnectionInput[]): this {
-        for (const conn of connections) {
-            const distance = conn.distance ?? 1;
-            const danger = conn.danger ?? 0;
+        for (const connection of connections) {
+            const record: LocationConnectionRecord = {
+                targetId: connection.targetId,
+                distance: connection.distance ?? 1,
+                danger: connection.danger ?? 0
+            };
 
-            if (conn.transport === "land") {
-                if (!this.landConnections.some(c => c.targetId === conn.targetId)) {
-                    this.landConnections.push({ targetId: conn.targetId, distance, danger });
-                }
-            } else if (conn.transport === "boat") {
-                if (!this.boatConnections.some(c => c.targetId === conn.targetId)) {
-                    this.boatConnections.push({ targetId: conn.targetId, distance, danger });
-                }
+            const targetConnections = connection.transport === "land" ? this.landConnections : this.boatConnections;
+
+            if (!targetConnections.some(({ targetId }) => targetId === connection.targetId)) {
+                targetConnections.push(record);
             }
         }
+
         return this;
     }
 
-    // Raccourcis pratiques
-    public linkLand(targetId: string, distance?: number, danger?: number): this {
+    /**
+     * Adds a land connection.
+     *
+     * @param targetId Target location identifier.
+     * @param distance Connection distance.
+     * @param danger Connection danger level.
+     * @returns The current builder.
+     */
+    public linkLand(targetId: string, distance = 1, danger = 0): this {
         return this.addConnections({ transport: "land", targetId, distance, danger });
     }
 
-    public linkBoat(targetId: string, distance?: number, danger?: number): this {
+    /**
+     * Adds a boat connection.
+     *
+     * @param targetId Target location identifier.
+     * @param distance Connection distance.
+     * @param danger Connection danger level.
+     * @returns The current builder.
+     */
+    public linkBoat(targetId: string, distance = 1, danger = 0): this {
         return this.addConnections({ transport: "boat", targetId, distance, danger });
     }
 
-    // Transforme l'objet en paramètres bruts acceptés par le manager
+    /**
+     * Builds the location creation parameters.
+     *
+     * @returns Location creation parameters.
+     * @throws LocationIdEmptyError if the location identifier is empty.
+     */
     public build(): LocationCreateParametres {
-        if (!this.id) throw new LocationIdEmptyError();
+        if (!this.id.trim()) {
+            throw new LocationIdEmptyError();
+        }
+
         return {
             id: this.id,
             type: this.type,
             flags: this.flags,
             connections: {
-                land: this.landConnections,
-                boat: this.boatConnections
+                land: [...this.landConnections],
+                boat: [...this.boatConnections]
             }
         };
     }

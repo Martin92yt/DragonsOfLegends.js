@@ -1,49 +1,78 @@
-import PlayerEntity from "./player.entity";
 import Database from "better-sqlite3";
+import PlayerEntity from "./player.entity";
 
 export default class PlayerMarriage {
     private partnerId: string;
-    private player: PlayerEntity;
-    private dbPath: string; // Ou une référence à ton instance de PlayerDatabase / db
+    private readonly player: PlayerEntity;
+    private readonly dbPath: string;
 
-    constructor(player: PlayerEntity, partner?: string, dbPath: string = "./data/player.db") {
-        this.partnerId = partner && partner !== "/" ? partner : "";
+    /**
+     * Creates a player marriage manager.
+     *
+     * @param player Player entity.
+     * @param partner Partner player identifier.
+     * @param dbPath Path to the SQLite database.
+     */
+    public constructor(player: PlayerEntity, partner?: string, dbPath: string = "./data/player.db") {
         this.player = player;
+        this.partnerId = partner && partner !== "/" ? partner : "";
         this.dbPath = dbPath;
     }
 
+    /**
+     * Sets the player's marriage partner.
+     *
+     * @param partnerId Partner player identifier.
+     * @returns The current marriage manager.
+     */
     public setPartner(partnerId: string): this {
-        this.partnerId = partnerId;
         const db = new Database(this.dbPath);
 
-        const now = new Date().toISOString();
+        try {
+            const setMarriage = db.transaction(() => {
+                db.prepare("DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?").run(this.player.id, this.player.id);
+                db.prepare("INSERT INTO Marriage (Player1, Player2, DateStart) VALUES (?, ?, ?)").run(this.player.id, partnerId, new Date().toISOString());
+            });
 
-        db.prepare(`DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?`).run(this.player.id, this.player.id);
-
-        db.prepare(`INSERT INTO Marriage (Player1, Player2, DateStart) VALUES (?, ?, ?)`).run(
-            this.player.id,
-            partnerId,
-            now
-        );
-
-        db.close();
-        return this;
+            setMarriage();
+            this.partnerId = partnerId;
+            return this;
+        } finally {
+            db.close();
+        }
     }
 
+    /**
+     * Ends the player's current marriage.
+     *
+     * @returns Nothing.
+     */
     public divorce(): void {
         const db = new Database(this.dbPath);
-        
-        db.prepare(`DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?`).run(this.player.id, this.player.id);
-        
-        db.close();
-        this.partnerId = "";
+
+        try {
+            db.prepare("DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?").run(this.player.id, this.player.id);
+            this.partnerId = "";
+        } finally {
+            db.close();
+        }
     }
 
+    /**
+     * Returns the current partner identifier.
+     *
+     * @returns The partner identifier or an empty string when unmarried.
+     */
     public getPartnerId(): string {
         return this.partnerId;
     }
 
+    /**
+     * Checks whether the player is currently married.
+     *
+     * @returns True when the player has a partner.
+     */
     public isMarried(): boolean {
-        return this.partnerId !== "" && this.partnerId !== "/";
+        return this.partnerId.length > 0;
     }
 }

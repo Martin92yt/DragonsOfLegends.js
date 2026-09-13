@@ -2,100 +2,161 @@ import Database from "better-sqlite3";
 import { PlayerData } from "./player.interface.js";
 import { Logger } from "../utils/logger.js";
 
-interface PlayerRecord { id: string; name: string; classId: PlayerData["classId"]; locationId: string; gold: number; }
-interface StatsRecord { level: number; experience: number; health: number; maxHealth: number; strength: number; agility: number; intelligence: number; defense: number; attributePoints: number; }
-interface MarriageRecord { player1: string; player2: string; dateStart: string; }
+interface PlayerRecord {
+    id: string;
+    name: string;
+    classId: PlayerData["classId"];
+    locationId: string;
+    gold: number;
+}
+
+interface StatsRecord {
+    level: number;
+    experience: number;
+    health: number;
+    maxHealth: number;
+    strength: number;
+    agility: number;
+    intelligence: number;
+    defense: number;
+    attributePoints: number;
+}
+
+interface MarriageRecord {
+    Player1: string;
+    Player2: string;
+    DateStart: string;
+}
+
+interface CountRecord {
+    count: number;
+}
+
+interface TableColumnRecord {
+    name: string;
+}
 
 export default class PlayerDatabase {
-    private readonly logger = new Logger({ context: "PlayerDatabase" });
+    readonly #logger = new Logger({ context: "PlayerDatabase" });
     private readonly database: Database.Database;
 
-    constructor() {
+    /**
+     * Creates a player database and initializes its schema.
+     */
+    public constructor() {
         this.database = new Database("./data/player.db");
         this.database.pragma("foreign_keys = ON");
         this.createTables();
         this.migrateStats();
-        
-        const totalPlayers = this.count();
-        this.logger.info(`Player database initialized successfully. (${totalPlayers} players registered)`);
+        this.#logger.info(`Player database initialized successfully. (${this.count()} players registered).`);
     }
 
+    /**
+     * Saves player data to the database.
+     *
+     * @param player Player data to save.
+     */
     public save(player: PlayerData): void {
         const transaction = this.database.transaction(() => {
             this.savePlayer(player);
             this.saveStats(player);
         });
+
         transaction();
-        this.logger.debug(`Saved player data for ${player.id} (ID: ${player.name}).`);
+        this.#logger.debug(`Saved player data for ${player.id} (${player.name}).`);
     }
 
+    /**
+     * Retrieves player data by identifier.
+     *
+     * @param identifier Player identifier.
+     * @returns Player data if found, otherwise undefined.
+     */
     public get(identifier: string): PlayerData | undefined {
         const player = this.findPlayer(identifier);
-        if (!player) return undefined;
+
+        if (!player) {
+            return undefined;
+        }
 
         const stats = this.findStats(identifier);
-        
-        // Récupérer le partenaire depuis la table Marriage (où le joueur est Player1 ou Player2)
-        const marriage = this.database.prepare(
-            `SELECT Player1, Player2 FROM Marriage WHERE Player1 = ? OR Player2 = ?`
-        ).get(identifier, identifier) as { Player1: string; Player2: string } | undefined;
+        const marriage = this.database
+            .prepare("SELECT Player1, Player2, DateStart FROM Marriage WHERE Player1 = ? OR Player2 = ?")
+            .get(identifier, identifier) as MarriageRecord | undefined;
 
-        // Si une ligne existe, le partenaire est l'autre ID
-        let partnerId = "";
-        if (marriage) {
-            partnerId = marriage.Player1 === identifier ? marriage.Player2 : marriage.Player1;
-        }
+        const partnerId = marriage
+            ? marriage.Player1 === identifier
+                ? marriage.Player2
+                : marriage.Player1
+            : "";
 
         return {
             id: player.id,
             name: player.name,
-            gold: player.gold ?? 0,
             classId: player.classId,
             locationId: player.locationId,
+            gold: player.gold,
             level: stats?.level ?? 1,
             experience: stats?.experience ?? 0,
-            partener: partnerId, // <--- Ajouté ici !
             health: stats?.health ?? 100,
             maxHealth: stats?.maxHealth ?? 100,
+            partener: partnerId,
             strength: stats?.strength ?? 0,
             agility: stats?.agility ?? 0,
             intelligence: stats?.intelligence ?? 0,
             defense: stats?.defense ?? 0,
-            attributePoints: stats?.attributePoints ?? 0,
+            attributePoints: stats?.attributePoints ?? 0
         };
     }
 
+    /**
+     * Deletes a player and all related data.
+     *
+     * @param identifier Player identifier.
+     * @returns True if the player was deleted.
+     */
     public delete(identifier: string): boolean {
         const transaction = this.database.transaction(() => {
-            this.database.prepare(`DELETE FROM Stats WHERE Identifier = ?`).run(identifier);
-            this.database.prepare(`DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?`).run(identifier, identifier);
-            const result = this.database.prepare(`DELETE FROM Player WHERE Identifier = ?`).run(identifier);
+            this.database.prepare("DELETE FROM Stats WHERE Identifier = ?").run(identifier);
+            this.database.prepare("DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?").run(identifier, identifier);
+            const result = this.database.prepare("DELETE FROM Player WHERE Identifier = ?").run(identifier);
             return result.changes > 0;
         });
 
-        const isDeleted = transaction();
-        if (isDeleted) {
-            this.logger.info(`Player ${identifier} successfully deleted from database.`);
+        const deleted = transaction();
+
+        if (deleted) {
+            this.#logger.info(`Player ${identifier} successfully deleted from database.`);
         } else {
-            this.logger.warn(`Attempted to delete player ${identifier}, but no record was found.`);
+            this.#logger.warn(`Player ${identifier} was not found in the database.`);
         }
-        return isDeleted;
+
+        return deleted;
     }
 
+    /**
+     * Returns the total number of registered players.
+     *
+     * @returns Number of registered players.
+     */
     public count(): number {
-        const result = this.database.prepare(`SELECT COUNT(*) as count FROM Player`).get() as { count: number };
+        const result = this.database.prepare("SELECT COUNT(*) AS count FROM Player").get() as CountRecord;
         return result.count;
     }
 
+    /**
+     * Creates the required database tables.
+     */
     private createTables(): void {
         this.database.exec(`
             CREATE TABLE IF NOT EXISTS Player (
-                Name TEXT NOT NULL, 
-                Identifier TEXT NOT NULL UNIQUE, 
-                Class TEXT NOT NULL DEFAULT 'unknown', 
-                Gold INTEGER NOT NULL DEFAULT 0, 
+                Name TEXT NOT NULL,
+                Identifier TEXT NOT NULL UNIQUE,
+                Class TEXT NOT NULL DEFAULT 'unknown',
+                Gold INTEGER NOT NULL DEFAULT 0,
                 LocationId TEXT NOT NULL DEFAULT ''
             );
+
             CREATE TABLE IF NOT EXISTS Stats (
                 Identifier TEXT NOT NULL UNIQUE,
                 Level INTEGER NOT NULL DEFAULT 1,
@@ -109,6 +170,7 @@ export default class PlayerDatabase {
                 AttributePoints INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (Identifier) REFERENCES Player(Identifier) ON DELETE CASCADE
             );
+
             CREATE TABLE IF NOT EXISTS Marriage (
                 Player1 TEXT NOT NULL,
                 Player2 TEXT NOT NULL,
@@ -119,8 +181,11 @@ export default class PlayerDatabase {
         `);
     }
 
+    /**
+     * Applies missing statistics columns to existing databases.
+     */
     private migrateStats(): void {
-        const columns = this.database.prepare("PRAGMA table_info(Stats)").all() as { name: string }[];
+        const columns = this.database.prepare("PRAGMA table_info(Stats)").all() as TableColumnRecord[];
         const existingColumns = new Set(columns.map(({ name }) => name));
 
         const migrations: Record<string, string> = {
@@ -128,20 +193,39 @@ export default class PlayerDatabase {
             Agility: "ALTER TABLE Stats ADD COLUMN Agility INTEGER NOT NULL DEFAULT 0",
             Intelligence: "ALTER TABLE Stats ADD COLUMN Intelligence INTEGER NOT NULL DEFAULT 0",
             Defense: "ALTER TABLE Stats ADD COLUMN Defense INTEGER NOT NULL DEFAULT 0",
-            AttributePoints: "ALTER TABLE Stats ADD COLUMN AttributePoints INTEGER NOT NULL DEFAULT 0",
+            AttributePoints: "ALTER TABLE Stats ADD COLUMN AttributePoints INTEGER NOT NULL DEFAULT 0"
         };
 
         for (const [column, query] of Object.entries(migrations)) {
-            if (existingColumns.has(column)) continue;
+            if (existingColumns.has(column)) {
+                continue;
+            }
+
             this.database.exec(query);
-            this.logger.info(`Migration applied: Added Stats.${column} column.`);
+            this.#logger.info(`Migration applied: Added Stats.${column} column.`);
         }
     }
 
+    /**
+     * Saves player statistics.
+     *
+     * @param player Player data containing statistics.
+     */
     private saveStats(player: PlayerData): void {
         this.database
             .prepare(`
-                INSERT INTO Stats (Identifier, Level, Experience, Health, MaxHealth, Strength, Agility, Intelligence, Defense, AttributePoints)
+                INSERT INTO Stats (
+                    Identifier,
+                    Level,
+                    Experience,
+                    Health,
+                    MaxHealth,
+                    Strength,
+                    Agility,
+                    Intelligence,
+                    Defense,
+                    AttributePoints
+                )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
@@ -157,22 +241,33 @@ export default class PlayerDatabase {
             `)
             .run(
                 player.id,
-                player.level ?? 1,
-                player.experience ?? 0,
-                player.health ?? 100,
-                player.maxHealth ?? 100,
-                player.strength ?? 0,
-                player.agility ?? 0,
-                player.intelligence ?? 0,
-                player.defense ?? 0,
-                player.attributePoints ?? 0,
+                player.level,
+                player.experience,
+                player.health,
+                player.maxHealth,
+                player.strength,
+                player.agility,
+                player.intelligence,
+                player.defense,
+                player.attributePoints
             );
     }
 
+    /**
+     * Saves basic player information.
+     *
+     * @param player Player data to save.
+     */
     private savePlayer(player: PlayerData): void {
         this.database
             .prepare(`
-                INSERT INTO Player (Name, Identifier, Class, LocationId, Gold)
+                INSERT INTO Player (
+                    Name,
+                    Identifier,
+                    Class,
+                    LocationId,
+                    Gold
+                )
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
@@ -182,23 +277,57 @@ export default class PlayerDatabase {
                     Gold = excluded.Gold
             `)
             .run(
-                player.name ?? "Unknown", 
-                player.id, 
-                player.classId ?? "unknown", 
-                player.locationId ?? "", 
-                player.gold ?? 0
+                player.name,
+                player.id,
+                player.classId,
+                player.locationId,
+                player.gold
             );
     }
 
+    /**
+     * Finds a player by identifier.
+     *
+     * @param identifier Player identifier.
+     * @returns Player database record if found.
+     */
     private findPlayer(identifier: string): PlayerRecord | undefined {
         return this.database
-            .prepare(`SELECT Name as name, Identifier as id, Class as classId, LocationId as locationId, Gold as gold FROM Player WHERE Identifier = ?`)
+            .prepare(`
+                SELECT
+                    Name AS name,
+                    Identifier AS id,
+                    Class AS classId,
+                    LocationId AS locationId,
+                    Gold AS gold
+                FROM Player
+                WHERE Identifier = ?
+            `)
             .get(identifier) as PlayerRecord | undefined;
     }
 
+    /**
+     * Finds player statistics by identifier.
+     *
+     * @param identifier Player identifier.
+     * @returns Player statistics if found.
+     */
     private findStats(identifier: string): StatsRecord | undefined {
         return this.database
-            .prepare(`SELECT Level as level, Experience as experience, Health as health, MaxHealth as maxHealth, Strength as strength, Agility as agility, Intelligence as intelligence, Defense as defense, AttributePoints as attributePoints FROM Stats WHERE Identifier = ?`)
+            .prepare(`
+                SELECT
+                    Level AS level,
+                    Experience AS experience,
+                    Health AS health,
+                    MaxHealth AS maxHealth,
+                    Strength AS strength,
+                    Agility AS agility,
+                    Intelligence AS intelligence,
+                    Defense AS defense,
+                    AttributePoints AS attributePoints
+                FROM Stats
+                WHERE Identifier = ?
+            `)
             .get(identifier) as StatsRecord | undefined;
     }
 }
