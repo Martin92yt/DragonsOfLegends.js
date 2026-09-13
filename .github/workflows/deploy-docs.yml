@@ -31,7 +31,10 @@ jobs:
       - name: Generate documentation
         run: npm run docs
 
-      - name: Upload documentation
+      - name: Add .nojekyll file
+        run: touch ./docs/.nojekyll
+
+      - name: Upload to Github Pages
         uses: actions/upload-pages-artifact@v4
         with:
           path: docs
