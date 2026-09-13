@@ -14,6 +14,7 @@
   "type": "module",
   "main": "./dist/world.js",
   "types": "./dist/world.d.ts",
+  "license": "MIT",
   "files": [
     "dist"
   ],

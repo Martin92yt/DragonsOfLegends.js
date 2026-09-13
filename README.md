@@ -23,7 +23,9 @@
 
  ## 💬 Join the Community
 
- <p align="center"> <a href="https://discord.gg/bwCkQEFWEt"> <img src="https://img.shields.io/badge/Join%20the%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"> </a> </p> The project is still young, and **your feedback is especially important**.
+ <p align="center"> <a href="https://discord.gg/bwCkQEFWEt"> <img src="https://img.shields.io/badge/Join%20the%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"> </a> </p>
+
+ The project is still young, and **your feedback is especially important**. 
 
  Whether you're a developer, RPG creator, or simply curious about the project, feel free to join the community and share your thoughts.
 
@@ -89,19 +91,19 @@
  ### npm
 
 ```
-npm install dragonsoflegends.js
+npm install dragons-of-legends.js
 ```
 
  ### Yarn
 
 ```
-yarn add dragonsoflegends.js
+yarn add dragons-of-legends.js
 ```
 
  ### pnpm
 
 ```
-pnpm add dragonsoflegends.js
+pnpm add dragons-of-legends.js
 ```
 
 ---
@@ -112,7 +114,7 @@ pnpm add dragonsoflegends.js
 
  Here is a simple example showing how to create a world, create a player, and give them a weapon:
 
-```
+```ts
 import World, {
     ItemCategory,
     ItemRarity,
@@ -149,7 +151,7 @@ console.log(player);
 
  ### 🎲 Damage Handling
 
-```
+```ts
 const damage = player.takeDamage(1);
 
 console.log(`⚔️ Damage dealt: ${damage?.rawDamage}`);
@@ -222,11 +224,11 @@ DragonsOfLegends.js
 
 ---
 
- ## 🗺️ Roadmap
 
- > 🚧 **The detailed roadmap will be available soon.**
+## 🗺️ Roadmap
 
- The project is currently in alpha, so features and priorities may evolve depending on development and community feedback.
+You can track **project progress in real time** on the Trello board *(read-only)*:
+> **[View roadmap](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs)**
 
 ---
 
@@ -289,16 +291,18 @@ DragonsOfLegends.js
 | 💬 **Discord** | [Join the server](<https://discord.gg/bwCkQEFWEt>) |
 | 🐙 **GitHub** | [Martin92yt/DragonsOfLegends.js](<https://github.com/Martin92yt/DragonsOfLegends.js>) |
 | 📦 **NPM** | [View package](<https://www.npmjs.com/package/dragonsoflegends.js>) |
-| 📋 **Trello** | Coming soon |
+| 📋 **Trello** | [View roadmap](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs) |
 | 📚 **Documentation** | Currently being created |
 
 ---
 
- ## 📄 License
+## 📄 License
 
- > ⚠️ **The project license has not been defined yet.**
+DragonsOfLegends.js is licensed under the MIT License.
 
- A license will be added before the first stable release.
+This means you are free to use, modify, distribute, and build upon the project, subject to the terms of the license.
+
+See the LICENSE file for the full license text.
 
 ---
 
