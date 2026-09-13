@@ -3,32 +3,50 @@ name: Deploy Documentation
 on:
   push:
     branches:
-      - main # Remplace par 'master' si c'est le nom de ta branche principale
+      - master
 
-# Autorise les lectures/écritures pour GitHub Pages
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/actions/setup-node@v4 # (ou setup-node@v4)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20' # Ajuste selon ta version de Node
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/package-lock.json
 
       - name: Install dependencies
+        working-directory: packages
         run: npm ci
 
       - name: Generate documentation
+        working-directory: packages
         run: npm run docs
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload documentation
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs # Le dossier généré par ta commande npm run docs
+          path: packages/docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
