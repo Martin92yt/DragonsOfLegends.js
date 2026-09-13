@@ -1,7 +1,7 @@
 {
   "name": "dragons-of-legends.js",
-  "version": "0.1.0-alpha.1",
-  "description": "A powerful TypeScript library for creating text-based RPGs, inventory systems, and adventure mechanics.",
+  "version": "0.1.0-alpha.2",
+  "description": "A TypeScript library for creating text-based RPGs, inventory systems, and adventure mechanics.",
   "homepage": "https://github.com/Martin92yt/DragonsOfLegends.js#readme",
   "bugs": {
     "url": "https://github.com/Martin92yt/DragonsOfLegends.js/issues"
@@ -10,20 +10,23 @@
     "type": "git",
     "url": "git+https://github.com/Martin92yt/DragonsOfLegends.js.git"
   },
-  "license": "ISC",
   "author": "Martin92yt",
   "type": "module",
-  "main": "src/world.ts",
+  "main": "./dist/world.js",
+  "types": "./dist/world.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "sandbox": "tsx ../sandbox/nodiscord.ts",
-    "demos": "tsx ../demos/src/index.ts",
-    "example": "tsx ../sandbox/example.ts"
+    "build": "tsc",
+    "publish:alpha": "npm run build && npm publish --tag alpha"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "tsx": "^4.23.13"
+    "tsx": "^4.23.13",
+    "typescript": "^5.0.0"
   }
 }

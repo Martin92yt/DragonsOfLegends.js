@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import PlayerEntity from "./player.entity";
+import PlayerEntity from "./player.entity.js";
 
 export default class PlayerMarriage {
     private partnerId: string;

@@ -1,4 +1,4 @@
-import EnemyEntity from "../enemy/enemy.entity";
+import EnemyEntity from "../enemy/enemy.entity.js";
 
 export interface CombatResult {
     playerDamage: number;

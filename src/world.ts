@@ -7,7 +7,7 @@ import OfficialMap from "./location/official-map.js";
 import { EnemyType } from "./enemy/enemy.type.js";
 import { Logger } from "./utils/logger.js";
 import type { EquipmentSlot } from "./inventory/item.enum.js";
-import { ItemCategory, ItemRarity } from "./inventory/item.enum";
+import { ItemCategory, ItemRarity } from "./inventory/item.enum.js";
 
 const logger = new Logger({ context: "World" });
 

@@ -1,10 +1,10 @@
 import EnemyManager from "../enemy/enemy.manager.js";
-import EnemyEntity from "../enemy/enemy.entity.js";
 import Player from "../player/player.entity.js";
 import { Logger } from "../utils/logger.js";
 import Combat from "./combat.js";
 import { CombatResult } from "../types/result.js";
 import { PlayerAlreadyInCombatError, PlayerNotInCombatError } from "../types/error.js";
+import EnemyEntity from "../enemy/enemy.entity.js";
 
 export default class CombatManager {
     private readonly combats = new Map<string, Combat>();

@@ -1,6 +1,8 @@
-import Database from "better-sqlite3";
 import { PlayerData } from "./player.interface.js";
 import { Logger } from "../utils/logger.js";
+import Database from "better-sqlite3";
+import path from "node:path";
+import fs from "node:fs";
 
 interface PlayerRecord {
     id: string;
@@ -44,6 +46,8 @@ export default class PlayerDatabase {
      * Creates a player database and initializes its schema.
      */
     public constructor() {
+        fs.mkdirSync(path.dirname("./data/player.db"), { recursive: true });
+        
         this.database = new Database("./data/player.db");
         this.database.pragma("foreign_keys = ON");
         this.createTables();

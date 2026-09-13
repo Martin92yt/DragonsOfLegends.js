@@ -2,12 +2,12 @@ import { PlayerClass } from "./player.class.js";
 import { Logger } from "../utils/logger.js";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
 import { InventoryEntity } from "../inventory/inventory.entity.js";
-import EnemyEntity from "../enemy/enemy.entity.js";
 import { EnemyType } from "../enemy/enemy.type.js";
 import { ExplorationResult, GainExperienceResult, DamageResult } from "../types/result.js";
 import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError, UnknownPlayerClassError } from "../types/error.js";
 import World from "../world.js";
 import PlayerMarriage from "./player.marriage.js";
+import EnemyEntity from "../enemy/enemy.entity.js";
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 

@@ -1,7 +1,9 @@
-import Database from "better-sqlite3";
-import { Logger } from "../utils/logger.js";
-import { EquipmentRecord, InventoryItemRecord } from "./inventory.interface.js";
 import { EquipmentSlot, ItemCategory, ItemRarity, VALID_EQUIPMENT_SLOTS } from "./item.enum.js";
+import { EquipmentRecord, InventoryItemRecord } from "./inventory.interface.js";
+import { Logger } from "../utils/logger.js";
+import Database from "better-sqlite3";
+import path from "node:path";
+import fs from "node:fs";
 
 interface InventoryRow {
     playerId: string;
@@ -32,6 +34,8 @@ export default class InventoryDatabase {
      * Creates and initializes the inventory database.
      */
     public constructor() {
+        fs.mkdirSync(path.dirname("./data/inventory.db"), { recursive: true });
+        
         this.database = new Database("./data/inventory.db");
         this.database.pragma("foreign_keys = ON");
         this.createTables();
