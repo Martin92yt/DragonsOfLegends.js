@@ -12,22 +12,31 @@
   },
   "author": "Martin92yt",
   "type": "module",
-  "main": "./dist/world.js",
-  "types": "./dist/world.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
+    "docs": "typedoc",
     "build": "tsc",
-    "publish:alpha": "npm run build && npm publish --tag alpha"
+    "publish:alpha": "npm run build && typedoc && npm publish --tag alpha"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
+    "@clean-jsdoc-theme/typedoc": "^5.2.0",
     "@types/better-sqlite3": "^9.6.0",
     "tsx": "^4.23.13",
+    "typedoc": "^0.28.20",
     "typescript": "^5.0.0"
   }
 }

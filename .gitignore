@@ -1,6 +1,8 @@
 .env
 .git/
 dist/
+# documentation/
+docs/
 node_modules/
 data/*
 note.txt

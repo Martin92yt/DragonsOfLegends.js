@@ -1,13 +1,8 @@
 import LocationManager from "./location/location.manager.js";
-import { LocationType } from "./location/location.type.js";
 import PlayerManager from "./player/player.manager.js";
 import CombatManager from "./combat/combat.manager.js";
-import { PlayerClass } from "./player/player.class.js";
 import OfficialMap from "./location/official-map.js";
-import { EnemyType } from "./enemy/enemy.type.js";
 import { Logger } from "./utils/logger.js";
-import type { EquipmentSlot } from "./inventory/item.enum.js";
-import { ItemCategory, ItemRarity } from "./inventory/item.enum.js";
 
 const logger = new Logger({ context: "World" });
 
@@ -51,5 +46,3 @@ export default class World {
         logger.blank();
     }
 }
-
-export { PlayerClass, EnemyType, LocationType, EquipmentSlot, ItemCategory, ItemRarity };
