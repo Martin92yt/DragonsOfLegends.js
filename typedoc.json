@@ -26,9 +26,9 @@
         "compactFolders": false
     },
 
-    "hostedBaseUrl": "https://martin92yt.github.io/DragonsOfLegends.js/docs/",
+    "hostedBaseUrl": "https://martin92yt.github.io/DragonsOfLegends.js/",
     "cleanJsdocTheme": {
-        "base": "/DragonsOfLegends.js/docs/",
+        "siteUrl": "https://martin92yt.github.io/DragonsOfLegends.js/", "basePath": "/docs",
         "siteName": "DragonsOfLegends.js",
 
         "docs": "./documentation",
