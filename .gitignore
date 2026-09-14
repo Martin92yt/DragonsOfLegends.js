@@ -1,8 +1,19 @@
-.env
-.git/
-dist/
-# documentation/
-docs/
+# Dependencies
 node_modules/
-data/*
+
+# Build & Compilation
+dist/
+
+# Documentation
+docs/
+examples/
+
+# Version Control
+.git/
+
+# Local Environment & Config
+.env
+# typedoc.json
+
+# Test & Local Sandbox Data
 note.txt

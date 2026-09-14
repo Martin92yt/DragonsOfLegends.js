@@ -394,20 +394,20 @@ export default class PlayerEntity {
         const stats: Record<PlayerClass, ClassStats> = {
             [PlayerClass.Warrior]: {
                 strength: 10,
-                agility: 5,
+                agility: 4,
                 intelligence: 3,
-                defense: 10
+                defense: 8
             },
             [PlayerClass.Explorer]: {
                 strength: 6,
-                agility: 10,
-                intelligence: 6,
+                agility: 7,
+                intelligence: 7,
                 defense: 5
             },
-            [PlayerClass.Mage]: {
-                strength: 3,
-                agility: 5,
-                intelligence: 12,
+            [PlayerClass.Rogue]: {
+                strength: 5,
+                agility: 9,
+                intelligence: 5,
                 defense: 4
             }
         };

@@ -1,7 +1,7 @@
 export enum PlayerClass {
     Warrior = "warrior",
     Explorer = "explorer",
-    Mage = "mage"
+    Rogue = "rogue"
 }
 
 export type PlayerClassId = `${PlayerClass}`;

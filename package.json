@@ -1,33 +1,25 @@
 {
   "name": "dragons-of-legends.js",
   "version": "0.1.0-alpha.2",
-  "description": "A TypeScript library for creating text-based RPGs, inventory systems, and adventure mechanics.",
-  "homepage": "https://github.com/Martin92yt/DragonsOfLegends.js#readme",
-  "bugs": {
-    "url": "https://github.com/Martin92yt/DragonsOfLegends.js/issues"
-  },
+  "description": "A TypeScript library for creating and structuring your text-based RPGs.",
+  "keywords": [ "rpg", "text-rpg", "text-based-rpg", "game-engine", "text-adventure", "typescript", "javascript", "node", "game-development", "rpg-engine", "inventory-system", "game-framework", "discord-bot-rpg", "world-building" ],
+  "author": "Martin92yt",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [ "dist" ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Martin92yt/DragonsOfLegends.js.git"
   },
-  "author": "Martin92yt",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "license": "MIT",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist"
-  ],
+  "bugs": "https://github.com/Martin92yt/DragonsOfLegends.js/issues",
+  "homepage": "https://github.com/Martin92yt/DragonsOfLegends.js#readme",
   "scripts": {
-    "docs": "typedoc",
     "build": "tsc",
-    "publish:alpha": "npm run build && typedoc && npm publish --tag alpha"
+    "docs": "typedoc",
+    "start:bot": "tsx ../demos/src/index.ts",
+    "publish:alpha": "npm run build && npm run docs && npm publish --tag alpha"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3"

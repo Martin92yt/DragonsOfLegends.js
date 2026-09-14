@@ -1,311 +1,93 @@
-<h1 align="center">🐉 DragonsOfLegends.js</h1> <p align="center"> <strong>A TypeScript library for building text-based RPGs, inventory systems, and adventure mechanics.</strong> </p> <p align="center"> <a href="https://discord.gg/bwCkQEFWEt"> <img src="https://img.shields.io/discord/1547998188621799476?style=for-the-badge&logo=discord&logoColor=white&label=Join%20us%20on%20Discord&color=5865F2" alt="Join us on Discord"> </a> <a href="https://www.npmjs.com/package/dragons-of-legends.js"> <img src="https://img.shields.io/npm/v/dragons-of-legends.js?style=for-the-badge&logo=npm&logoColor=white&label=npm" alt="NPM Version"> </a> <a href="https://www.npmjs.com/package/dragons-of-legends.js"> <img src="https://img.shields.io/npm/dm/dragons-of-legends.js?style=for-the-badge&logo=npm&logoColor=white&label=downloads" alt="NPM Downloads"> </a> <a href="https://github.com/Martin92yt/DragonsOfLegends.js/commits/main"> <img src="https://img.shields.io/github/last-commit/Martin92yt/DragonsOfLegends.js?style=for-the-badge&logo=git&logoColor=white" alt="Last Commit"> </a> <a href="https://github.com/Martin92yt/DragonsOfLegends.js"> <img src="https://img.shields.io/github/stars/Martin92yt/DragonsOfLegends.js?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Stars"> </a> </p> <p align="center"> <a href="#-about">About</a> • <a href="#-features">Features</a> • <a href="#-installation">Installation</a> • <a href="#-usage">Usage</a> • <a href="#-documentation">Documentation</a> • <a href="#-roadmap">Roadmap</a> • <a href="#-contributing">Contributing</a> </p>
+<div align="center">
 
- ## 📖 About
+### [📚 Documentation](https://martin92yt.github.io/DragonsOfLegends.js/) • [📦 NPM](https://www.npmjs.com/package/dragons-of-legends.js) • [🗺️ Trello](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs) • [🐙 GitHub](https://github.com/Martin92yt/DragonsOfLegends.js) • [💬 Discord](https://discord.gg/bwCkQEFWEt)
 
- **DragonsOfLegends.js** is a **TypeScript** library designed to make it easier to build **text-based role-playing games (RPGs)** and their various mechanics.
+</div>
 
- The project provides a modular foundation for progressively building an RPG with different systems:
+# 🐉 DragonsOfLegends.js
 
- - 👤 Characters and statistics
-- 🎒 Inventory and items
-- ⚔️ Equipment and durability
-- 💥 Combat and damage
-- 💰 Economy
-- 🎁 Loot and rewards
-- 🗺️ Adventure mechanics
+**A TypeScript library for creating and structuring your text-based RPGs.**
 
- The goal is to provide a flexible library that can be adapted to different RPG projects while keeping the API simple and easy to understand.
+<div> 
+  <p> 
+    <a href="https://www.npmjs.com/package/dragons-of-legends.js"> <img src="https://img.shields.io/npm/v/dragons-of-legends.js?style=for-the-badge&logo=npm&logoColor=white&label=Version&color=CB3837" alt="NPM Version"> </a> 
+    <a href="https://www.npmjs.com/package/dragons-of-legends.js"> <img src="https://img.shields.io/npm/dt/dragons-of-legends.js?style=for-the-badge&logo=npm&logoColor=white&label=Downloads&color=CB3837" alt="NPM Downloads"> </a> 
+    <a href="https://discord.gg/bwCkQEFWEt"> <img src="https://img.shields.io/discord/1547998188621799476?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord Server"> </a> 
+    <a href="https://github.com/Martin92yt/DragonsOfLegends.js/commits/main"> <img src="https://img.shields.io/github/last-commit/Martin92yt/DragonsOfLegends.js?style=for-the-badge&logo=git&logoColor=white&label=Last%20update&color=F05032" alt="Last update"> </a> 
+  </p> 
+</div>
 
- > 🚧 **The project is currently in alpha.**
->  The API and some features may change as development progresses.
+> **⚠️ Under Development:** This project is currently in alpha. The syntax, methods, and API structure are subject to change before the first stable release.
 
----
+## About
 
- ## 💬 Join the Community
+**DragonsOfLegends.js** is a **TypeScript** library designed to simplify the development of text-based role-playing games. 
 
- <p align="center"> <a href="https://discord.gg/bwCkQEFWEt"> <img src="https://img.shields.io/badge/Join%20the%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"> </a> </p>
+The main goal is to save you from the tedious task of building all game logic from scratch. The library handles data structures behind the scenes (players, inventories, combat, economy, worlds) using ready-to-use entities. 
 
- The project is still young, and **your feedback is especially important**. 
+Thus, **you can focus entirely on what matters most: the interface, the story, and your players' experience**, whether you are powering a Discord RPG bot, a website, or any other JavaScript application.
 
- Whether you're a developer, RPG creator, or simply curious about the project, feel free to join the community and share your thoughts.
 
- You can share:
+## Quick Start
 
- - 💡 Feature ideas
-- 🎮 RPG mechanics you'd like to see
-- 🐛 Bugs or unexpected behavior
-- 🧩 API suggestions
-- 📚 Documentation feedback
-- 💭 Ideas for improvements
-- 💬 Or simply a constructive comment
+### Installation
 
- **You don't need to contribute code to help the project.**
-
- Even a simple comment or idea can help significantly improve the library.
-
- 👉 **[Join the Discord server](<https://discord.gg/bwCkQEFWEt>)**
-
----
-
- ## ✨ Features
-
- ### 🎒 Inventory & Equipment
-
- A flexible system for managing character items and equipment.
-
- - 📦 Inventory management
-- 🗂️ Item categories
-- ⚔️ Equipment system
-- 🧩 Equipment slots
-- 🔨 Item durability
-- 🔄 Item management and modification
-- 🛠️ Extensible system for creating custom item types
-
- ### ⚔️ Characters & Statistics
-
- Characters have various systems for building their own RPG profiles.
-
- - 🧙 Character classes
-- 📊 Statistics and attributes
-- 💪 Customizable characteristics
-- 🎲 Damage rolls
-- 💥 Critical hits
-- ⚔️ Combat mechanics
-- 🔧 Customizable systems
-
- ### 💰 Economy & Loot
-
- A collection of mechanics for building your RPG's economy and reward systems.
-
- - 💰 Currencies and values
-- 🎁 Reward systems
-- 🎲 Loot
-- 📦 Item generation
-- 🏆 Customizable rewards
-- 🔮 Loot tables
-
----
-
- ## 📦 Installation
-
- ### npm
-
-```
+```bash
+# npm
 npm install dragons-of-legends.js
-```
 
- ### Yarn
-
-```
+# Yarn
 yarn add dragons-of-legends.js
-```
 
- ### pnpm
-
-```
+# pnpm
 pnpm add dragons-of-legends.js
+
+
 ```
 
----
+### Basic Example
 
- ## 🚀 Usage
+```typescript
+import World, { PlayerClass } from "dragons-of-legends.js";
 
- ### Quick Example
+const world = new World({ useWorld: true });
 
- Here is a simple example showing how to create a world, create a player, and give them a weapon:
-
-```ts
-import World, {
-    ItemCategory,
-    ItemRarity,
-    PlayerClass,
-} from "../packages/src/world";
-
-const rpg = new World({
-    useWorld: true,
-});
-
-const player = rpg.players.create({
+// Create a player
+const player = world.players.create({
     id: "Player001",
     name: "OneXPlayerX_",
     playerClass: PlayerClass.Explorer,
-    locationId: rpg.location.getStartingCityId(),
+    locationId: world.location.getStartingCityId(),
 });
 
-player.inventory.add(
-    {
-        itemId: "iron_sword",
-        name: "Iron Sword",
-        category: ItemCategory.Weapons,
-        rarity: ItemRarity.Common,
-        data: {
-            damageBonus: 5,
-            durability: 100,
-        },
-    },
-    1,
-);
-
+// The library returns a structured object (PlayerEntity) containing 
+// all the data, inventory, and sub-systems of the player.
 console.log(player);
+/*
+PlayerEntity {
+  id: 'Player001',
+  name: 'OneXPlayerX_',
+  classId: 'explorer',
+  location: 'Embercross',
+  level: 1,
+  gold: 0,
+  experience: { current: 0, required: 100 },
+  health: { current: 100, max: 110 },
+  attributes: { points: 0, strength: 5, agility: 11, intelligence: 6, defense: 5 },
+  inventory: InventoryEntity { ... },
+  marriage: PlayerMarriage { ... },
+  isTravelling: false,
+  inCombat: false
+}
+*/
+
+
 ```
 
- ### 🎲 Damage Handling
+## License
 
-```ts
-const damage = player.takeDamage(1);
+Distributed under the **MIT** License. See the `LICENSE` file for more information.
 
-console.log(`⚔️ Damage dealt: ${damage?.rawDamage}`);
-```
+**Build your world. Create your legends.**
 
- > ⚠️ As the API is still under development, some elements may change before the first stable release.
-
----
-
- ## 🧱 Architecture
-
- DragonsOfLegends.js is organized around several independent systems to make the project easier to evolve.
-
-```
-DragonsOfLegends.js
-│
-├── 👤 Characters
-│   ├── Classes
-│   ├── Attributes
-│   ├── Statistics
-│   └── Combat
-│
-├── 🎒 Inventory
-│   ├── Items
-│   ├── Categories
-│   ├── Equipment
-│   ├── Slots
-│   └── Durability
-│
-├── 💰 Economy
-│   ├── Currency
-│   ├── Rewards
-│   └── Transactions
-│
-└── 🎁 Loot
-    ├── Loot Tables
-    ├── Drops
-    └── Rewards
-```
-
- This architecture aims to keep the project **modular, extensible, and easy to maintain**.
-
----
-
- ## 📚 Documentation
-
- > 🚧 **Documentation is currently being created.**
-
- Two documentation resources are planned:
-
- ### 🔌 API — Developers
-
- Documentation focused on developers who want to use **DragonsOfLegends.js** in their own projects.
-
- It will cover the library's API, classes, methods, parameters, systems, and code examples.
-
- ### 📖 Guide — Users
-
- A practical guide for users who want to understand **how to build their RPG with DragonsOfLegends.js** without having to know the entire API.
-
- It will cover topics such as:
-
- - 👹 Creating an enemy
-- ⚔️ Configuring enemy statistics
-- 💥 Setting up damage
-- 🎁 Configuring loot
-- 📊 Setting drop rates
-- 🗺️ Creating and managing parts of the game world
-- 🎒 Configuring rewards and items
-
----
-
-
-## 🗺️ Roadmap
-
-You can track **project progress in real time** on the Trello board *(read-only)*:
-> **[View roadmap](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs)**
-
----
-
- ## 🤖 Transparency
-
- I want to be transparent about how this project is being developed.
-
- **DragonsOfLegends.js was developed largely with the help of AI, using a "vibe-coding" approach.**
-
- This means that parts of the code and project content were generated or developed with the assistance of artificial intelligence tools.
-
- Since the project is still young, it may contain questionable design choices, imperfections, or areas that could be improved.
-
- I'm still learning, and **constructive criticism is genuinely welcome**.
-
- If you find something that could be improved, have an idea, or simply want to point something out, **please come and discuss it on Discord**.
-
- 👉 **[Share feedback on Discord](<https://discord.gg/bwCkQEFWEt>)**
-
----
-
- ## 🤝 Contributing
-
- For now, the best way to contribute to the project is to **share your ideas and feedback**.
-
- You can suggest:
-
- - 💡 New features
-- ⚔️ New RPG mechanics
-- 🧩 API improvements
-- 🐛 Bug reports
-- 📚 Documentation improvements
-- 🏗️ Architecture suggestions
-- 💭 Any other idea that could improve the project
-
- ### 💬 Even a simple comment helps
-
- You don't need to know how to code or use TypeScript to contribute to the project.
-
- If you simply think:
-
- > "This feature could be done better."
-
- or:
-
- > "Why not add this mechanic?"
-
- **Don't hesitate to say it.**
-
- Constructive feedback is exactly what can help DragonsOfLegends.js grow and improve.
-
- 👉 **[Join the Discord and share your feedback](<https://discord.gg/bwCkQEFWEt>)**
-
----
-
- ## 🔗 Useful Links
-
- | Resource | Link |
-| --- | --- |
-| 💬 **Discord** | [Join the server](<https://discord.gg/bwCkQEFWEt>) |
-| 🐙 **GitHub** | [Martin92yt/DragonsOfLegends.js](<https://github.com/Martin92yt/DragonsOfLegends.js>) |
-| 📦 **NPM** | [View package](<https://www.npmjs.com/package/dragonsoflegends.js>) |
-| 📋 **Trello** | [View roadmap](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs) |
-| 📚 **Documentation** | Currently being created |
-
----
-
-## 📄 License
-
-DragonsOfLegends.js is licensed under the MIT License.
-
-This means you are free to use, modify, distribute, and build upon the project, subject to the terms of the license.
-
-See the LICENSE file for the full license text.
-
----
-
- ## 🐉 DragonsOfLegends.js
-
- <p align="center"> <strong>Build your world. Create your legends.</strong> <br> <sub>Made with ❤️, TypeScript & AI-assisted development.</sub> </p> <p align="center"> <a href="https://discord.gg/bwCkQEFWEt"> 💬 Join the community </a> </p>
+*Made with TypeScript and AI-assisted development.*

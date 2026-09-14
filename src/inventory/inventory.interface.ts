@@ -1,11 +1,12 @@
 import { EquipmentSlot, ItemCategory, ItemRarity } from "./item.enum.js";
 
 export interface ItemNBT {
+    XPBonus?: number;
     damageBonus?: number;
     healthBonus?: number;
     defenseBonus?: number;
     critRateBonus?: number;
-    durability?: number;
+    durability: number;
     [key: string]: unknown;
 }
 
