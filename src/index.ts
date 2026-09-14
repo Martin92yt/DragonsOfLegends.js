@@ -19,3 +19,5 @@ export { default as LocationManager } from "./location/location.class.js";
 export { LocationBuilder } from "./location/location.builder.js";
 export { LocationFlags } from "./location/location.flags.js";
 export { LocationType } from "./location/location.type.js";
+
+export { default as BankClass } from "./economy/Bank.class.js";

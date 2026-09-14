@@ -1,14 +1,31 @@
 {
   "name": "dragons-of-legends.js",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "A TypeScript library for creating and structuring your text-based RPGs.",
-  "keywords": [ "rpg", "text-rpg", "text-based-rpg", "game-engine", "text-adventure", "typescript", "javascript", "node", "game-development", "rpg-engine", "inventory-system", "game-framework", "discord-bot-rpg", "world-building" ],
+  "keywords": [
+    "rpg",
+    "text-rpg",
+    "text-based-rpg",
+    "game-engine",
+    "text-adventure",
+    "typescript",
+    "javascript",
+    "node",
+    "game-development",
+    "rpg-engine",
+    "inventory-system",
+    "game-framework",
+    "discord-bot-rpg",
+    "world-building"
+  ],
   "author": "Martin92yt",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": [ "dist" ],
+  "files": [
+    "dist"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Martin92yt/DragonsOfLegends.js.git"
@@ -20,7 +37,8 @@
     "docs": "typedoc",
     "start:bot": "tsx ../demos/src/index.ts",
     "start:example": "tsx ../sandbox/example.ts",
-    "publish:alpha": "npm run build && npm run docs && npm publish --tag alpha"
+    "publish:alpha": "npm version prerelease --preid=alpha --no-git-tag-version && npm run build && npm publish --tag alpha --access public",
+    "publish": "npm version patch --no-git-tag-version && npm run build && npm publish --tag latest --access public"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3"
