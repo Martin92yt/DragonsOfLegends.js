@@ -6,7 +6,7 @@ export interface ItemNBT {
     healthBonus?: number;
     defenseBonus?: number;
     critRateBonus?: number;
-    durability: number;
+    durability?: number;
     [key: string]: unknown;
 }
 

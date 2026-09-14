@@ -13,7 +13,7 @@ examples/
 
 # Local Environment & Config
 .env
-# typedoc.json
+typedoc.json
 
 # Test & Local Sandbox Data
 note.txt
