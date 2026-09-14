@@ -4,7 +4,7 @@ import Player from "./player.entity.js";
 import { Logger } from "../utils/logger.js";
 import World from "../world.js";
 import { PlayerAlreadyExistsError } from "../types/error.js";
-import { InventoryEntity } from "../inventory/inventory.entity.js";
+import { InventoryEntity } from "../inventory/inventory.class.js";
 
 export default class PlayerManager {
     private static readonly INACTIVITY_TIME = 15 * 60 * 1000;
@@ -230,7 +230,9 @@ export default class PlayerManager {
             intelligence: player.attributes.intelligence,
             defense: player.attributes.defense,
             attributePoints: player.attributes.points,
-            gold: player.gold
+            gold: player.gold,
+            bankGold: player.bankGold,
+            bankUnlocked: player.bankUnlocked
         };
 
         this.database.save(data);

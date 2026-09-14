@@ -1,4 +1,4 @@
-import EnemyEntity from "../enemy/enemy.entity.js";
+import EnemyEntity from "../enemy/enemy.class.js";
 
 export interface CombatResult {
     playerDamage: number;
@@ -28,4 +28,9 @@ export interface DamageResult {
     reducedDamage: number;
     currentHealth: number;
     rawDamage: number;
+}
+
+export interface BankResult {
+    solde: number;
+    success: boolean;
 }

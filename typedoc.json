@@ -2,29 +2,37 @@
     "entryPoints": ["src/index.ts"],
     "tsconfig": "tsconfig.json",
     "readme": "README.md",
+
     "plugin": ["@clean-jsdoc-theme/typedoc"],
+
     "outputs": [
         {
             "name": "clean-jsdoc-theme",
             "path": "./docs"
         }
     ],
+
     "excludePrivate": true,
     "excludeProtected": true,
     "excludeInternal": true,
     "disableSources": true,
+
     "categorizeByGroup": true,
+
     "navigation": {
         "includeCategories": true,
         "includeGroups": false,
         "includeFolders": false,
         "compactFolders": false
     },
+
     "hostedBaseUrl": "https://martin92yt.github.io/DragonsOfLegends.js/",
     "cleanJsdocTheme": {
-        "siteUrl": "https://martin92yt.github.io/DragonsOfLegends.js/",
-        "basePath": "DragonsOfLegends.js",
+        "siteUrl": "https://martin92yt.github.io/DragonsOfLegends.js/", "basePath": "DragonsOfLegends.js&",
         "siteName": "DragonsOfLegends.js",
+
+        "docs": "./documentation",
+
         "menu": [
             {
                 "title": "GitHub",
@@ -42,16 +50,14 @@
                 "icon": "simpleicons:discord"
             }
         ],
-        "sectionOrder": [
-            "Getting Started",
-            "Classes",
-            "Modules"
-        ],
+        "sectionOrder": ["Getting Started", "Classes", "Modules"],
         "clubSidebarItems": true,
-        "copyPage": {
-            "enabled": false
-        },
+        "copyPage": { "enabled": false },
         "scrollbar": "native",
+        "docGroups": [
+            "Getting Started"
+        ],
+
         "collapsibleSidebarSections": true
     }
 }

@@ -19,6 +19,7 @@
     "build": "tsc",
     "docs": "typedoc",
     "start:bot": "tsx ../demos/src/index.ts",
+    "start:example": "tsx ../sandbox/example.ts",
     "publish:alpha": "npm run build && npm run docs && npm publish --tag alpha"
   },
   "dependencies": {

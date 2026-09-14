@@ -222,3 +222,32 @@ export class PlayerAlreadyExistsError extends Error {
         this.name = "PlayerAlreadyExistsError";
     }
 }
+
+export class BankError extends Error {
+    public constructor(message: string) {
+        super(message);
+        this.name = "BankError";
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+
+export class BankLockedError extends BankError {
+    public constructor(message: string = "Bank account is not unlocked.") {
+        super(message);
+        this.name = "BankLockedError";
+    }
+}
+
+export class InsufficientFundsError extends BankError {
+    public constructor(message: string = "Insufficient funds to complete this transaction.") {
+        super(message);
+        this.name = "InsufficientFundsError";
+    }
+}
+
+export class InvalidAmountError extends BankError {
+    public constructor(message: string = "The specified amount is invalid.") {
+        super(message);
+        this.name = "InvalidAmountError";
+    }
+}

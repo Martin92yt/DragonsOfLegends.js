@@ -1,5 +1,5 @@
 import Player from "../player/player.entity.js";
-import Enemy from "../enemy/enemy.entity.js";
+import Enemy from "../enemy/enemy.class.js";
 import { Logger } from "../utils/logger.js";
 import { CombatResult } from "../types/result.js";
 import { ItemNBT, InventoryItemRecord } from "../inventory/inventory.interface.js";

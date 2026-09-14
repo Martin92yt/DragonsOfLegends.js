@@ -1,13 +1,13 @@
 import { PlayerClass } from "./player.class.js";
 import { Logger } from "../utils/logger.js";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
-import { InventoryEntity } from "../inventory/inventory.entity.js";
+import { InventoryEntity } from "../inventory/inventory.class.js";
 import { EnemyType } from "../enemy/enemy.type.js";
 import { ExplorationResult, GainExperienceResult, DamageResult } from "../types/result.js";
 import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError, UnknownPlayerClassError } from "../types/error.js";
 import World from "../world.js";
 import PlayerMarriage from "./player.marriage.js";
-import EnemyEntity from "../enemy/enemy.entity.js";
+import EnemyEntity from "../enemy/enemy.class.js";
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
@@ -27,6 +27,8 @@ export default class PlayerEntity {
     public experience: PlayerExperience;
     public health: PlayerHealth;
     public attributes: PlayerAttributes;
+    public bankGold: number;
+    public bankUnlocked: boolean;
     public readonly inventory: InventoryEntity;
     public marriage: PlayerMarriage;
     public isTravelling = false;
@@ -51,6 +53,8 @@ export default class PlayerEntity {
      * @param defense Initial defense value.
      * @param attributePoints Initial available attribute points.
      * @param gold Initial gold amount.
+     * @param bankGold BankGold
+     * @param bankUnlocked bankUnlocked
      */
     public constructor(
         rpg: World,
@@ -68,11 +72,15 @@ export default class PlayerEntity {
         intelligence?: number,
         defense?: number,
         attributePoints = 0,
-        gold = 0
+        gold = 0,
+        bankGold: number = 0,
+        bankUnlocked: boolean = false
     ) {
         this.rpg = rpg;
         this.level = Math.max(1, level);
         this.gold = Math.max(0, gold);
+        this.bankGold = Math.max(0, bankGold);
+        this.bankUnlocked = bankUnlocked;
 
         const baseStats = this.generateBaseStats();
 

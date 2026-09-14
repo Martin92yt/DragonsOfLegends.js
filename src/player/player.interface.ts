@@ -16,6 +16,8 @@ export interface PlayerData {
     intelligence: number;
     defense: number;
     gold: number;
+    bankGold: number;
+    bankUnlocked: boolean;
 }
 
 export interface CreatePlayerOptions {
@@ -65,4 +67,40 @@ export interface PlayerSnapshot {
     attributes: PlayerAttributes;
     locationId: string;
     gold: number;
+}
+
+export interface PlayerRecord {
+    id: string;
+    name: string;
+    classId: PlayerData["classId"];
+    locationId: string;
+    gold: number;
+    bankGold: number;
+    bankUnlocked: boolean;
+}
+
+export interface StatsRecord {
+    level: number;
+    experience: number;
+    health: number;
+    maxHealth: number;
+    strength: number;
+    agility: number;
+    intelligence: number;
+    defense: number;
+    attributePoints: number;
+}
+
+export interface MarriageRecord {
+    Player1: string;
+    Player2: string;
+    DateStart: string;
+}
+
+export interface CountRecord {
+    count: number;
+}
+
+export interface TableColumnRecord {
+    name: string;
 }

@@ -1,42 +1,8 @@
-import { PlayerData } from "./player.interface.js";
+import { CountRecord, MarriageRecord, PlayerData, PlayerRecord, StatsRecord, TableColumnRecord } from "./player.interface.js";
 import { Logger } from "../utils/logger.js";
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
-
-interface PlayerRecord {
-    id: string;
-    name: string;
-    classId: PlayerData["classId"];
-    locationId: string;
-    gold: number;
-}
-
-interface StatsRecord {
-    level: number;
-    experience: number;
-    health: number;
-    maxHealth: number;
-    strength: number;
-    agility: number;
-    intelligence: number;
-    defense: number;
-    attributePoints: number;
-}
-
-interface MarriageRecord {
-    Player1: string;
-    Player2: string;
-    DateStart: string;
-}
-
-interface CountRecord {
-    count: number;
-}
-
-interface TableColumnRecord {
-    name: string;
-}
 
 export default class PlayerDatabase {
     readonly #logger = new Logger({ context: "PlayerDatabase" });
@@ -52,6 +18,7 @@ export default class PlayerDatabase {
         this.database.pragma("foreign_keys = ON");
         this.createTables();
         this.migrateStats();
+        this.migratePlayer();
         this.#logger.info(`Player database initialized successfully. (${this.count()} players registered).`);
     }
 
@@ -100,6 +67,8 @@ export default class PlayerDatabase {
             classId: player.classId,
             locationId: player.locationId,
             gold: player.gold,
+            bankGold: player.bankGold ?? 0,              // <--- Ajouté ici
+            bankUnlocked: Boolean(player.bankUnlocked),  // <--- Ajouté ici
             level: stats?.level ?? 1,
             experience: stats?.experience ?? 0,
             health: stats?.health ?? 100,
@@ -152,13 +121,14 @@ export default class PlayerDatabase {
      * Creates the required database tables.
      */
     private createTables(): void {
-        this.database.exec(`
-            CREATE TABLE IF NOT EXISTS Player (
+        this.database.exec(`CREATE TABLE IF NOT EXISTS Player (
                 Name TEXT NOT NULL,
                 Identifier TEXT NOT NULL UNIQUE,
                 Class TEXT NOT NULL DEFAULT 'unknown',
                 Gold INTEGER NOT NULL DEFAULT 0,
-                LocationId TEXT NOT NULL DEFAULT ''
+                LocationId TEXT NOT NULL DEFAULT '',
+                BankGold INTEGER NOT NULL DEFAULT 0,        -- <--- Ajout
+                BankUnlocked INTEGER NOT NULL DEFAULT 0    -- <--- Ajout (0 = false, 1 = true)
             );
 
             CREATE TABLE IF NOT EXISTS Stats (
@@ -207,6 +177,24 @@ export default class PlayerDatabase {
 
             this.database.exec(query);
             this.#logger.info(`Migration applied: Added Stats.${column} column.`);
+        }
+    }
+
+     /**
+     * Applies missing player columns to existing databases.
+     */
+    private migratePlayer(): void {
+        const columns = this.database.prepare("PRAGMA table_info(Player)").all() as TableColumnRecord[];
+        const existingColumns = new Set(columns.map(({ name }) => name));
+
+        if (!existingColumns.has("BankGold")) {
+            this.database.exec("ALTER TABLE Player ADD COLUMN BankGold INTEGER NOT NULL DEFAULT 0");
+            this.#logger.info("Migration applied: Added Player.BankGold column.");
+        }
+
+        if (!existingColumns.has("BankUnlocked")) {
+            this.database.exec("ALTER TABLE Player ADD COLUMN BankUnlocked INTEGER NOT NULL DEFAULT 0");
+            this.#logger.info("Migration applied: Added Player.BankUnlocked column.");
         }
     }
 
@@ -270,22 +258,28 @@ export default class PlayerDatabase {
                     Identifier,
                     Class,
                     LocationId,
-                    Gold
+                    Gold,
+                    BankGold,
+                    BankUnlocked
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
                     Name = excluded.Name,
                     Class = excluded.Class,
                     LocationId = excluded.LocationId,
-                    Gold = excluded.Gold
+                    Gold = excluded.Gold,
+                    BankGold = excluded.BankGold,
+                    BankUnlocked = excluded.BankUnlocked
             `)
             .run(
                 player.name,
                 player.id,
                 player.classId,
                 player.locationId,
-                player.gold
+                player.gold,
+                player.bankGold ?? 0,
+                player.bankUnlocked ? 1 : 0 // Conversion booléen en entier pour SQLite
             );
     }
 
@@ -296,18 +290,27 @@ export default class PlayerDatabase {
      * @returns Player database record if found.
      */
     private findPlayer(identifier: string): PlayerRecord | undefined {
-        return this.database
+        const record = this.database
             .prepare(`
                 SELECT
                     Name AS name,
                     Identifier AS id,
                     Class AS classId,
                     LocationId AS locationId,
-                    Gold AS gold
+                    Gold AS gold,
+                    BankGold AS bankGold,
+                    BankUnlocked AS bankUnlocked
                 FROM Player
                 WHERE Identifier = ?
             `)
-            .get(identifier) as PlayerRecord | undefined;
+            .get(identifier) as { name: string; id: string; classId: PlayerData["classId"]; locationId: string; gold: number; bankGold: number; bankUnlocked: boolean } | undefined;
+
+        if (!record) return undefined;
+
+        return {
+            ...record,
+            bankUnlocked: Boolean(record.bankUnlocked) // S'assure de retourner un vrai boolean
+        };
     }
 
     /**
