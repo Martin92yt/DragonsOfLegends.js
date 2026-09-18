@@ -35,7 +35,7 @@ export default class World {
     public readonly combat: CombatManager = new CombatManager();
     public readonly location: LocationClass = new LocationClass();
     public readonly bank: BankClass = new BankClass(this);
-
+    public readonly initializationOptions: WorldInitializationOptions
     /**
      * Creates an instance of the World class and initializes game systems.
      * 
@@ -43,7 +43,7 @@ export default class World {
      * @returns void
      */
     public constructor(
-        public readonly initializationOptions: WorldInitializationOptions = {
+        initializationOptions: WorldInitializationOptions = {
             premadeMap: true,
             checkUpdates: true,
             database: { adapter: "file", path: "./data.db" },
@@ -53,10 +53,10 @@ export default class World {
             starterGold: 150,
             starterItems: { health_potion: 3, rusty_sword: 1 },
             bankUnlockCost: 1000,
-            // bankCapacitySlots: 50,
             bankMaxGoldLimit: 500000,
         }
     ) {
+        this.initializationOptions = initializationOptions;
         this.initializeWorld(this.initializationOptions);
     }
 
