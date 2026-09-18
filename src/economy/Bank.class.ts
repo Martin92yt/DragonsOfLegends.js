@@ -20,8 +20,8 @@ export default class BankClass {
     /**
      * Retrieves a player entity by their identifier.
      */
-    private getPlayerById(playerIdentifier: string): PlayerEntity | undefined {
-        const foundPlayerEntity = this.worldInstance.players.get(playerIdentifier);
+    private async getPlayerById(playerIdentifier: string): Promise<PlayerEntity | undefined> {
+        const foundPlayerEntity = await this.worldInstance.players.get(playerIdentifier);
         if (!foundPlayerEntity) {
             consola.warn(`Failed to find player with identifier ${playerIdentifier} in bank system.`);
         }
@@ -46,7 +46,7 @@ export default class BankClass {
     /**
      * Retrieves the partner of a player if they are married and the partner's bank is unlocked.
      */
-    private getValidPartner(playerEntity: PlayerEntity): PlayerEntity | undefined {
+    private async getValidPartner(playerEntity: PlayerEntity): Promise<PlayerEntity | undefined> {
         if (!playerEntity.marriage?.isMarried()) {
             return undefined;
         }
@@ -56,16 +56,16 @@ export default class BankClass {
             return undefined;
         }
 
-        const partnerPlayerEntity = this.getPlayerById(partnerIdentifier);
+        const partnerPlayerEntity = await this.getPlayerById(partnerIdentifier);
         return partnerPlayerEntity && partnerPlayerEntity.bankUnlocked ? partnerPlayerEntity : undefined;
     }
 
     /**
      * Gets the total bank balance of the couple (or individual if not married).
      */
-    public getBalanceTotal(playerEntity: PlayerEntity): number {
+    public async getBalanceTotal(playerEntity: PlayerEntity): Promise<number> {
         let totalCombinedBankGold = playerEntity.bankGold;
-        const validPartnerEntity = this.getValidPartner(playerEntity);
+        const validPartnerEntity = await this.getValidPartner(playerEntity);
         
         if (validPartnerEntity) {
             totalCombinedBankGold += validPartnerEntity.bankGold;
@@ -77,7 +77,7 @@ export default class BankClass {
     /**
      * Deposits money from wallet to bank.
      */
-    public deposit(playerEntity: PlayerEntity, depositAmount: number): BankResult {
+    public async deposit(playerEntity: PlayerEntity, depositAmount: number): Promise<BankResult> {
         this.validateTransaction(playerEntity, depositAmount, "Deposit");
 
         if (playerEntity.gold < depositAmount) {
@@ -87,10 +87,8 @@ export default class BankClass {
 
         const maxGoldLimit = this.worldInstance.initializationOptions.bankMaxGoldLimit ?? 500000;
         
-        // Si le joueur est marié, on multiplie la limite par 2 (suppose qu'il y a une propriété isMarried ou partenaire sur playerEntity)
         const effectiveLimit = playerEntity.marriage.isMarried() ? maxGoldLimit * 2 : maxGoldLimit;
 
-        // Si la limite n'est pas illimitée (-1) et que le nouveau montant dépasse la limite autorisée
         if (effectiveLimit !== -1 && (playerEntity.bankGold + depositAmount) > effectiveLimit) {
             consola.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);
             throw new Error(`Bank gold limit reached (Maximum allowed: ${effectiveLimit}).`);
@@ -101,16 +99,16 @@ export default class BankClass {
 
         consola.success(`${playerEntity.name} deposited ${depositAmount} gold.`);
 
-        return { balance: this.getBalanceTotal(playerEntity), success: true };
+        return { balance: await this.getBalanceTotal(playerEntity), success: true };
     }
 
     /**
      * Withdraws money from bank to wallet.
      */
-    public withdraw(playerEntity: PlayerEntity, withdrawalAmount: number): BankResult {
+    public async withdraw(playerEntity: PlayerEntity, withdrawalAmount: number): Promise<BankResult> {
         this.validateTransaction(playerEntity, withdrawalAmount, "Withdrawal");
 
-        const totalBankBeforeWithdrawal = this.getBalanceTotal(playerEntity);
+        const totalBankBeforeWithdrawal = await this.getBalanceTotal(playerEntity);
         if (totalBankBeforeWithdrawal < withdrawalAmount) {
             consola.warn(`Withdrawal failed for ${playerEntity.name}: insufficient bank funds (${totalBankBeforeWithdrawal}/${withdrawalAmount}).`);
             throw new InsufficientFundsError("Not enough gold in the bank.");
@@ -124,14 +122,14 @@ export default class BankClass {
             remainingAmountToWithdraw -= playerEntity.bankGold;
             playerEntity.bankGold = 0;
 
-            const validPartnerEntity = this.getValidPartner(playerEntity);
+            const validPartnerEntity = await this.getValidPartner(playerEntity);
             if (validPartnerEntity) {
                 validPartnerEntity.bankGold -= remainingAmountToWithdraw;
             }
         }
 
         playerEntity.gold += withdrawalAmount;
-        const totalBankAfterWithdrawal = this.getBalanceTotal(playerEntity);
+        const totalBankAfterWithdrawal = await this.getBalanceTotal(playerEntity);
 
         consola.success(`${playerEntity.name} withdrew ${withdrawalAmount} gold.`);
 
@@ -141,13 +139,13 @@ export default class BankClass {
     /**
      * Gets the total bank balance.
      */
-    public solde(playerEntity: PlayerEntity): BankResult {
+    public async solde(playerEntity: PlayerEntity): Promise<BankResult> {
         if (!playerEntity.bankUnlocked) {
             consola.warn(`Balance check failed: bank is locked for player ${playerEntity.name}.`);
             throw new BankLockedError();
         }
 
-        return { balance: this.getBalanceTotal(playerEntity), success: true };
+        return { balance: await this.getBalanceTotal(playerEntity), success: true };
     }
 
     /**
