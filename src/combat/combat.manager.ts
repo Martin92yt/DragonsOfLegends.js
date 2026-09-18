@@ -35,9 +35,6 @@ export default class CombatManager {
 
     /**
      * Starts a combat against a randomly selected enemy.
-     *
-     * @param playerEntity The player starting the combat.
-     * @returns The newly created combat instance.
      */
     public start(playerEntity: PlayerEntity): Combat {
         const generatedEnemyEntity = this.enemyManagerInstance.create(playerEntity);
@@ -46,10 +43,6 @@ export default class CombatManager {
 
     /**
      * Starts a combat against a specific enemy.
-     *
-     * @param playerEntity The player starting the combat.
-     * @param enemyEntity The enemy to fight.
-     * @returns The newly created combat instance.
      */
     public startWithEnemy(playerEntity: PlayerEntity, enemyEntity: EnemyEntity): Combat {
         return this.registerCombat(playerEntity, enemyEntity);
@@ -57,18 +50,16 @@ export default class CombatManager {
 
     /**
      * Performs an attack for a player in combat.
-     *
-     * @param targetPlayerId The player's identifier.
-     * @returns The result of the attack.
      */
-    public attack(targetPlayerId: string): CombatResult {
+    public async attack(targetPlayerId: string): Promise<CombatResult> {
         const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
         if (!activeCombatInstance) {
             consola.warn(`Attack failed: player with ID ${targetPlayerId} is not in combat.`);
             throw new PlayerNotInCombatError(targetPlayerId);
         }
 
-        const combatTurnResult = activeCombatInstance.attack();
+        // 🛡️ Ajout du 'await' indispensable ici car Combat.attack() est devenu async
+        const combatTurnResult = await activeCombatInstance.attack();
         if (combatTurnResult.victory || combatTurnResult.defeat) {
             this.clear(targetPlayerId);
         }
@@ -77,9 +68,6 @@ export default class CombatManager {
 
     /**
      * Checks whether a player has an active combat.
-     *
-     * @param targetPlayerId The player's identifier.
-     * @returns True if the player has an active combat, false otherwise.
      */
     public has(targetPlayerId: string): boolean {
         return this.activeCombatMap.has(targetPlayerId);
@@ -87,9 +75,6 @@ export default class CombatManager {
 
     /**
      * Retrieves a player's active combat.
-     *
-     * @param targetPlayerId The player's identifier.
-     * @returns The active combat or undefined if none exists.
      */
     public get(targetPlayerId: string): Combat | undefined {
         const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
@@ -101,9 +86,6 @@ export default class CombatManager {
 
     /**
      * Removes a player's active combat.
-     *
-     * @param targetPlayerId The player's identifier.
-     * @returns True if a combat was removed, false otherwise.
      */
     public clear(targetPlayerId: string): boolean {
         const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
@@ -115,8 +97,6 @@ export default class CombatManager {
 
     /**
      * Gets the number of active combats.
-     *
-     * @returns The number of active combats.
      */
     public get size(): number {
         return this.activeCombatMap.size;
@@ -124,13 +104,10 @@ export default class CombatManager {
 
     /**
      * Stops all active combats and safely compensates affected players with balanced values.
-     *
-     * @returns void
      */
     public stopAllCombats(): void {
         for (const activeCombatInstance of this.activeCombatMap.values()) {
             const affectedPlayerEntity = activeCombatInstance.playerEntity;
-            // Rebalanced compensation scaling to prevent runaway inflation during global resets.
             affectedPlayerEntity.addXP(affectedPlayerEntity.level * 5);
             affectedPlayerEntity.gold += Math.floor(affectedPlayerEntity.gold * 0.005);
             affectedPlayerEntity.inCombat = false;

@@ -11,39 +11,33 @@ export default class PlayerManager {
     public readonly world: World;
     private readonly activePlayersMap = new Map<string, Player>();
     private readonly unloadTimersMap = new Map<string, NodeJS.Timeout>();
-    private readonly playerDatabase = new PlayerDatabase(this);
+    private readonly playerDatabase;
 
-    /**
-     * Creates a player manager.
-     *
-     * @param worldInstance The world instance associated with the player manager.
-     * @returns void
-     */
     public constructor(worldInstance: World) {
         this.world = worldInstance;
+        this.playerDatabase = new PlayerDatabase(this);
     }
 
     /**
      * Ensures that a player exists in memory.
-     *
-     * @param playerIdOrCreationOptions The player identifier or player creation options.
-     * @returns The existing player, the loaded player, or a newly created player, or undefined if not found/created.
      */
-    public ensure(playerIdOrCreationOptions: string | CreatePlayerOptions): Player | undefined {
+    public async ensure(playerIdOrCreationOptions: string | CreatePlayerOptions): Promise<Player | undefined> {
         if (typeof playerIdOrCreationOptions === "string") {
-            return this.get(playerIdOrCreationOptions);
+            return await this.get(playerIdOrCreationOptions);
         }
 
-        return this.get(playerIdOrCreationOptions.id) ?? this.create(playerIdOrCreationOptions);
+        const existingPlayer = await this.get(playerIdOrCreationOptions.id);
+        if (existingPlayer) {
+            return existingPlayer;
+        }
+
+        return await this.create(playerIdOrCreationOptions);
     }
 
     /**
      * Gets a player by identifier.
-     *
-     * @param playerId The player identifier.
-     * @returns The player if found, otherwise undefined.
      */
-    public get(playerId: string): Player | undefined {
+    public async get(playerId: string): Promise<Player | undefined> {
         const activePlayer = this.activePlayersMap.get(playerId);
 
         if (activePlayer) {
@@ -51,21 +45,17 @@ export default class PlayerManager {
             return activePlayer;
         }
 
-        const playerData = this.playerDatabase.get(playerId);
+        const dbResult = this.playerDatabase.get(playerId);
+        const playerData = dbResult instanceof Promise ? await dbResult : dbResult;
+        
         if (!playerData) {
             return undefined;
         }
 
-        return this.loadPlayerIntoCache(playerData);
+        return await this.loadPlayerIntoCache(playerData);
     }
 
-    /**
-     * Instantiates a player from database data, loads their inventory, and caches them.
-     *
-     * @param playerData The raw player data from the database.
-     * @returns The newly loaded player instance.
-     */
-    private loadPlayerIntoCache(playerData: PlayerData): Player {
+    private async loadPlayerIntoCache(playerData: PlayerData): Promise<Player> {
         const playerInstance = new Player(
             this.world,
             playerData.id,
@@ -77,15 +67,17 @@ export default class PlayerManager {
             playerData.health,
             playerData.maxHealth,
             playerData.partnerId,
+            playerData.gold,        
+            playerData.bankGold,    
+            playerData.bankUnlocked,
+            playerData.attributePoints,
             playerData.strength,
             playerData.agility,
             playerData.intelligence,
-            playerData.defense,
-            playerData.attributePoints,
-            playerData.gold
+            playerData.defense
         );
 
-        playerInstance.inventory.load();
+        await playerInstance.inventory.load();
         this.activePlayersMap.set(playerData.id, playerInstance);
         this.refreshUnloadTimer(playerData.id);
         consola.debug(`Player ${playerData.id} loaded into cache.`);
@@ -95,15 +87,11 @@ export default class PlayerManager {
 
     /**
      * Creates and persists a new player.
-     *
-     * @param creationOptions The player creation options.
-     * @returns The newly created player.
-     * @throws PlayerAlreadyExistsError If the player already exists.
      */
-    public create(creationOptions: CreatePlayerOptions): Player {
+    public async create(creationOptions: CreatePlayerOptions): Promise<Player> {
         const { id: playerId, name: playerName, playerClass } = creationOptions;
 
-        if (this.exist(playerId)) {
+        if (await this.exist(playerId)) {
             consola.warn(`Attempt to create already existing player ${playerId}.`);
             throw new PlayerAlreadyExistsError(playerId);
         }
@@ -119,45 +107,55 @@ export default class PlayerManager {
             100,
             100,
             "",
-            this.world.initializationOptions.starterGold || 0
+            this.world.initializationOptions.starterGold ?? 0
         );
 
         this.activePlayersMap.set(playerId, newPlayerInstance);
-        // TODO: Starter Items
-        this.save(newPlayerInstance);
+        await this.save(newPlayerInstance);
         this.refreshUnloadTimer(playerId);
         consola.success(`Player ${playerId} created.`);
 
         return newPlayerInstance;
     }
 
-    /**
-     * Checks whether a player exists.
-     *
-     * @param playerId The player identifier.
-     * @returns True if the player exists, false otherwise.
-     */
-    public exist(playerId: string): boolean {
-        return this.activePlayersMap.has(playerId) || this.playerDatabase.get(playerId) !== undefined;
+    public tickRegen(amount: number = 5): void {
+        for (const [playerId, playerInstance] of this.activePlayersMap) {
+            if (playerInstance.health.current < playerInstance.health.max) {
+                const oldHealth = playerInstance.health.current;
+                playerInstance.health.current = Math.min(
+                    playerInstance.health.max,
+                    playerInstance.health.current + amount
+                );
+
+                consola.debug(`Player ${playerId} regenerated health: ${oldHealth} -> ${playerInstance.health.current}/${playerInstance.health.max}`);
+            }
+        }
     }
 
     /**
-     * Deletes a player from memory, inventory, and database.
-     *
-     * @param playerId The player identifier.
-     * @returns True if the player was deleted from the database, false otherwise.
+     * Checks whether a player exists.
      */
-    public delete(playerId: string): boolean {
+    public async exist(playerId: string): Promise<boolean> {
+        if (this.activePlayersMap.has(playerId)) {
+            return true;
+        }
+        const dbResult = this.playerDatabase.get(playerId);
+        const playerData = dbResult instanceof Promise ? await dbResult : dbResult;
+        return playerData !== undefined;
+    }
+
+    public async delete(playerId: string): Promise<boolean> {
         this.clearUnloadTimer(playerId);
         this.activePlayersMap.delete(playerId); 
-        let player = this.get(playerId);
+        const player = await this.get(playerId);
         if (!player) {
             consola.warn(`Failed to delete non-existent player ${playerId} from database.`);
             return false;
-        };
-        new InventoryEntity(playerId, player).clear();
+        }
+        await new InventoryEntity(playerId, player).clear();
 
-        const isDeleted = this.playerDatabase.delete(playerId);
+        const dbDeleteResult = this.playerDatabase.delete(playerId);
+        const isDeleted = dbDeleteResult instanceof Promise ? await dbDeleteResult : dbDeleteResult;
 
         if (isDeleted) {
             consola.info(`Player ${playerId} deleted.`);
@@ -165,28 +163,18 @@ export default class PlayerManager {
             consola.warn(`Failed to delete non-existent player ${playerId} from database.`);
         }
 
-        return isDeleted;
+        return isDeleted as boolean;
     }
 
-    /**
-     * Returns the current player count.
-     *
-     * @returns The active and total player counts.
-     */
     public count(): PlayerCount {
+        // Gardé synchrone si getPlayerCount() est synchrone, ou à adapter si `count()` est aussi une Promise dans ta base.
         return {
             active: this.activePlayersMap.size,
-            total: this.playerDatabase.count()
+            total: (this.playerDatabase.count() as number) ?? 0
         };
     }
 
-    /**
-     * Removes a player from the active cache after saving it.
-     *
-     * @param playerId The player identifier.
-     * @returns void
-     */
-    public remove(playerId: string): void {
+    public async remove(playerId: string): Promise<void> {
         const playerInstance = this.activePlayersMap.get(playerId);
 
         if (!playerInstance) {
@@ -195,32 +183,22 @@ export default class PlayerManager {
             return;
         }
 
-        this.save(playerInstance);
+        await this.save(playerInstance);
         this.clearUnloadTimer(playerId);
         this.activePlayersMap.delete(playerId);
     }
 
-    /**
-     * Refreshes the inactivity timer for a player.
-     *
-     * @param playerId The player identifier.
-     * @returns void
-     */
     private refreshUnloadTimer(playerId: string): void {
         this.clearUnloadTimer(playerId);
 
-        const inactivityTimer = setTimeout(() => this.remove(playerId), PlayerManager.INACTIVITY_TIME_MS);
+        const inactivityTimer = setTimeout(async () => {
+            await this.remove(playerId);
+        }, PlayerManager.INACTIVITY_TIME_MS);
 
         inactivityTimer.unref();
         this.unloadTimersMap.set(playerId, inactivityTimer);
     }
 
-    /**
-     * Clears a player's inactivity timer.
-     *
-     * @param playerId The player identifier.
-     * @returns void
-     */
     private clearUnloadTimer(playerId: string): void {
         const inactivityTimer = this.unloadTimersMap.get(playerId);
 
@@ -232,13 +210,7 @@ export default class PlayerManager {
         this.unloadTimersMap.delete(playerId);
     }
 
-    /**
-     * Saves a player to the database.
-     *
-     * @param playerInstance The player to save.
-     * @returns void
-     */
-    private save(playerInstance: Player): void {
+    public async save(playerInstance: Player): Promise<void> {
         const playerData: PlayerData = {
             id: playerInstance.id,
             name: playerInstance.name,
@@ -259,37 +231,22 @@ export default class PlayerManager {
             bankUnlocked: playerInstance.bankUnlocked
         };
 
-        this.playerDatabase.save(playerData);
+        const saveResult = this.playerDatabase.save(playerData);
+        if (saveResult instanceof Promise) await saveResult;
     }
 
-    /**
-     * Checks whether a player exists.
-     *
-     * @param playerId The player identifier.
-     * @returns True if the player exists, false otherwise.
-     */
-    public has(playerId: string): boolean {
-        return this.exist(playerId);
+    public async has(playerId: string): Promise<boolean> {
+        return await this.exist(playerId);
     }
 
-    /**
-     * Returns the number of active players.
-     *
-     * @returns The number of active players.
-     */
     public get size(): number {
         return this.activePlayersMap.size;
     }
 
-    /**
-     * Saves all active players and their inventories.
-     *
-     * @returns void
-     */
-    public saveAll(): void {
+    public async saveAll(): Promise<void> {
         for (const [playerId, playerInstance] of this.activePlayersMap) {
-            this.save(playerInstance);
-            playerInstance.inventory.save();
+            await this.save(playerInstance);
+            await playerInstance.inventory.save();
             this.clearUnloadTimer(playerId);
         }
 

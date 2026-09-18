@@ -81,13 +81,13 @@ export default class PlayerEntity {
         maxHealth = PlayerEntity.BASE_HEALTH,
         partnerId = "",
         gold = 0,
+        bankGold = 0,
+        bankUnlocked = false,
         strength?: number,
         agility?: number,
         intelligence?: number,
         defense?: number,
         attributePoints = 0,
-        bankGold = 0,
-        bankUnlocked = false
     ) {
         this.worldInstance = worldInstance;
         this.level = Math.max(1, level);
@@ -197,12 +197,13 @@ export default class PlayerEntity {
      * @param damage The raw incoming damage amount.
      * @returns The damage result, or null if no damage can be applied.
      */
-    public takeDamage(damage: number): (DamageResult & { death?: DeathResult }) | null {
+    public async takeDamage(damage: number): Promise<(DamageResult & { death?: DeathResult }) | null> {
         if (damage <= 0 || !this.isAlive()) {
             return null;
         }
 
-        const items = this.inventory.getItems();
+        // 1. Ajouter 'await' ici
+        const items = await this.inventory.getItems();
         const { flatDefense, percentDefense } = this.processEquipmentStats(items, damage);
         
         const totalDefense = Math.max(0, Math.floor((this.attributes.defense + flatDefense) * (1 + percentDefense)));
@@ -218,7 +219,8 @@ export default class PlayerEntity {
             deathResult = handlePlayerDeath(this);
         }
 
-        this.inventory.save(items);
+        // 2. Ajouter 'await' ici aussi (car save() est async)
+        await this.inventory.save(items);
 
         return {
             reducedDamage,
@@ -280,10 +282,12 @@ export default class PlayerEntity {
      *
      * @returns void
      */
-    public updateMaxHealth(): void {
+    public async updateMaxHealth(): Promise<void> {
         const baseMaxHealth = PlayerEntity.BASE_HEALTH + this.level * PlayerEntity.HP_PER_LEVEL;
-        const bonusHealth = this.inventory
-            .getItems()
+        
+        // Ajout du 'await' ici pour récupérer les items de l'inventaire
+        const items = await this.inventory.getItems();
+        const bonusHealth = items
             .filter(item => item.isEquipped)
             .reduce((total, item) => total + (typeof item.itemNbtData?.healthBonus === "number" ? item.itemNbtData.healthBonus : 0), 0);
 

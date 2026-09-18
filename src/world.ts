@@ -16,6 +16,8 @@ interface WorldInitializationOptions {
     database?: {
         adapter?: "file" | "mongodb";
         path?: string;
+        uri?: string;
+        name?: string
     };
 
     deathMode?: "hardcore" | "cooldown" | "loose";
@@ -28,14 +30,20 @@ interface WorldInitializationOptions {
     bankUnlockCost?: number;
     // bankCapacitySlots?: number;
     bankMaxGoldLimit?: number;
+
+    regen?: {
+        enabled: boolean;
+        rate: number; // 5 PV récupérés par tour ou par action
+        cooldown: number; // ou toutes les X secondes
+    }
 }
 
 export default class World {
-    public readonly players: PlayerManager = new PlayerManager(this);
-    public readonly combat: CombatManager = new CombatManager();
-    public readonly location: LocationClass = new LocationClass();
-    public readonly bank: BankClass = new BankClass(this);
-    public readonly initializationOptions: WorldInitializationOptions
+    public readonly combat: CombatManager;
+    public readonly location: LocationClass;
+    public readonly bank: BankClass;
+    public readonly players: PlayerManager;
+    public initializationOptions: WorldInitializationOptions
     /**
      * Creates an instance of the World class and initializes game systems.
      * 
@@ -54,10 +62,29 @@ export default class World {
             starterItems: { health_potion: 3, rusty_sword: 1 },
             bankUnlockCost: 1000,
             bankMaxGoldLimit: 500000,
+            regen: {
+                enabled: true,
+                rate: 5, // 5 PV récupérés par tour ou par action
+                cooldown: 10, // ou toutes les X secondes
+            }
         }
     ) {
         this.initializationOptions = initializationOptions;
+        this.location = new LocationClass();
+        this.bank = new BankClass(this);
+        this.combat = new CombatManager()
+        this.players = new PlayerManager(this);
         this.initializeWorld(this.initializationOptions);
+
+        // Gestion automatique de la régénération si activée dans les options
+        if (this.initializationOptions.regen?.enabled) {
+            const regenRate = this.initializationOptions.regen.rate;
+            const regenCooldownMs = (this.initializationOptions.regen.cooldown || 10) * 1000;
+
+            setInterval(() => {
+                this.players.tickRegen(regenRate);
+            }, regenCooldownMs);
+        }
     }
 
     /**

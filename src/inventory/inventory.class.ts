@@ -76,8 +76,9 @@ export class InventoryEntity {
      *
      * @returns An array of the player's inventory items.
      */
-    public load(): InventoryItemRecord[] {
-        return this.inventoryDatabaseInstance.getPlayerInventory(this.playerIdIdentifier);
+    public async load(): Promise<InventoryItemRecord[]> {
+        const result = this.inventoryDatabaseInstance.getPlayerInventory(this.playerIdIdentifier);
+        return result instanceof Promise ? await result : result;
     }
 
     /**
@@ -85,8 +86,8 @@ export class InventoryEntity {
      *
      * @returns An array of the player's inventory items.
      */
-    public getItems(): InventoryItemRecord[] {
-        return this.load();
+    public async getItems(): Promise<InventoryItemRecord[]> {
+        return await this.load();
     }
 
     /**
@@ -94,8 +95,9 @@ export class InventoryEntity {
      *
      * @returns The player's equipment record.
      */
-    public getEquipment(): EquipmentRecord {
-        return this.inventoryDatabaseInstance.getPlayerEquipment(this.playerIdIdentifier);
+    public async getEquipment(): Promise<EquipmentRecord> {
+        const result = this.inventoryDatabaseInstance.getPlayerEquipment(this.playerIdIdentifier);
+        return result instanceof Promise ? await result : result;
     }
 
     /**
@@ -106,7 +108,7 @@ export class InventoryEntity {
      * @param itemNbtData The optional item data.
      * @returns void
      */
-    public add(itemInput: ItemInput, itemQuantity = 1, itemNbtData: ItemNBT | null = null): void {
+    public async add(itemInput: ItemInput, itemQuantity = 1, itemNbtData: ItemNBT | null = null): Promise<void> {
         if (itemQuantity <= 0) {
             return;
         }
@@ -119,7 +121,7 @@ export class InventoryEntity {
 
         const inputItemNbtData = typeof itemInput === "string" ? null : itemInput.data ?? null;
         const resolvedItemData = itemNbtData ?? inputItemNbtData;
-        const inventoryItems = this.load();
+        const inventoryItems = await this.load();
         const existingInventoryItem = inventoryItems.find(
             itemRecord => itemRecord.itemId === extractedItemId && !itemRecord.isEquipped && JSON.stringify(itemRecord.itemNbtData ?? null) === JSON.stringify(resolvedItemData)
         );
@@ -143,7 +145,8 @@ export class InventoryEntity {
             return;
         }
 
-        this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
+        const saveResult = this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
+        if (saveResult instanceof Promise) await saveResult;
     }
 
     /**
@@ -153,13 +156,13 @@ export class InventoryEntity {
      * @param itemQuantity The amount to remove.
      * @returns True if the item was successfully removed, false otherwise.
      */
-    public remove(itemInput: string | Pick<Item, "itemId">, itemQuantity = 1): boolean {
+    public async remove(itemInput: string | Pick<Item, "itemId">, itemQuantity = 1): Promise<boolean> {
         if (itemQuantity <= 0) {
             return false;
         }
 
         const extractedItemId = typeof itemInput === "string" ? itemInput : itemInput.itemId;
-        const inventoryItems = this.load();
+        const inventoryItems = await this.load();
         const inventoryItemRecord = inventoryItems.find(inventoryItem => inventoryItem.itemId === extractedItemId && !inventoryItem.isEquipped);
 
         if (!inventoryItemRecord || inventoryItemRecord.quantity < itemQuantity) {
@@ -168,10 +171,12 @@ export class InventoryEntity {
         }
 
         inventoryItemRecord.quantity -= itemQuantity;
-        this.inventoryDatabaseInstance.savePlayerInventory(
+        const saveResult = this.inventoryDatabaseInstance.savePlayerInventory(
             this.playerIdIdentifier,
             inventoryItems.filter(inventoryItem => inventoryItem.quantity > 0)
         );
+        if (saveResult instanceof Promise) await saveResult;
+
         consola.success(`Removed ${itemQuantity}x ${extractedItemId} from inventory for ${this.getOwnerName()}.`);
         return true;
     }
@@ -183,8 +188,8 @@ export class InventoryEntity {
      * @param itemId The item identifier.
      * @returns True if the item was successfully equipped, false otherwise.
      */
-    public equip(equipmentSlot: EquipmentSlot, itemId: string): boolean {
-        const inventoryItems = this.load();
+    public async equip(equipmentSlot: EquipmentSlot, itemId: string): Promise<boolean> {
+        const inventoryItems = await this.load();
         const targetInventoryItem = inventoryItems.find(itemRecord => itemRecord.itemId === itemId && !itemRecord.isEquipped);
 
         if (!targetInventoryItem) {
@@ -213,7 +218,9 @@ export class InventoryEntity {
             targetInventoryItem.equipmentSlot = equipmentSlot;
         }
 
-        this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
+        const saveResult = this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
+        if (saveResult instanceof Promise) await saveResult;
+
         this.playerEntityReference?.updateMaxHealth();
         consola.success(`${this.getOwnerName()} equipped ${targetInventoryItem.name} to ${equipmentSlot}.`);
         return true;
@@ -236,8 +243,8 @@ export class InventoryEntity {
      * @param equipmentSlot The equipment slot.
      * @returns True if an item was unequipped, false otherwise.
      */
-    public unequip(equipmentSlot: EquipmentSlot): boolean {
-        const inventoryItems = this.load();
+    public async unequip(equipmentSlot: EquipmentSlot): Promise<boolean> {
+        const inventoryItems = await this.load();
         const equippedItemRecord = inventoryItems.find(itemRecord => itemRecord.isEquipped && itemRecord.equipmentSlot === equipmentSlot);
 
         if (!equippedItemRecord) {
@@ -247,7 +254,10 @@ export class InventoryEntity {
 
         equippedItemRecord.isEquipped = false;
         equippedItemRecord.equipmentSlot = null;
-        this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
+
+        const saveResult = this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
+        if (saveResult instanceof Promise) await saveResult;
+
         this.playerEntityReference?.updateMaxHealth();
         consola.success(`${this.getOwnerName()} unequipped ${equippedItemRecord.name} from ${equipmentSlot}.`);
         return true;
@@ -258,8 +268,10 @@ export class InventoryEntity {
      *
      * @returns True if the inventory was successfully cleared, false otherwise.
      */
-    public clear(): boolean {
-        const isInventoryCleared = this.inventoryDatabaseInstance.clearInventory(this.playerIdIdentifier);
+    public async clear(): Promise<boolean> {
+        const clearResult = this.inventoryDatabaseInstance.clearInventory(this.playerIdIdentifier);
+        const isInventoryCleared = clearResult instanceof Promise ? await clearResult : clearResult;
+        
         if (isInventoryCleared) {
             consola.success(`Cleared inventory for ${this.getOwnerName()}.`);
         }
@@ -272,11 +284,13 @@ export class InventoryEntity {
      * @param itemsToSave The optional inventory items to save.
      * @returns void
      */
-    public save(itemsToSave?: InventoryItemRecord[]): void {
-        const itemsList = itemsToSave ?? this.load();
-        this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, itemsList);
-        this.inventoryDatabaseInstance.save();
-        consola.success(`Saved inventory for ${this.getOwnerName()}.`);
+    public async save(itemsToSave?: InventoryItemRecord[]): Promise<void> {
+        const itemsList = itemsToSave ?? (await this.load());
+        const saveResult = this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, itemsList);
+        if (saveResult instanceof Promise) await saveResult;
+
+        const dbSaveResult = this.inventoryDatabaseInstance.save();
+        if (dbSaveResult instanceof Promise) await dbSaveResult;
     }
 
     /**
@@ -285,8 +299,9 @@ export class InventoryEntity {
      * @param equipmentSlot The equipment slot.
      * @returns The equipped item record or undefined.
      */
-    public getEquippedInSlot(equipmentSlot: EquipmentSlot): InventoryItemRecord | undefined {
-        return this.load().find(itemRecord => itemRecord.isEquipped && itemRecord.equipmentSlot === equipmentSlot);
+    public async getEquippedInSlot(equipmentSlot: EquipmentSlot): Promise<InventoryItemRecord | undefined> {
+        const items = await this.load();
+        return items.find(itemRecord => itemRecord.isEquipped && itemRecord.equipmentSlot === equipmentSlot);
     }
 
     /**
@@ -326,12 +341,12 @@ export class InventoryEntity {
      * @param itemQuantity The amount to sell.
      * @returns The amount of gold received.
      */
-    public sellItem(itemId: string, itemQuantity = 1): number {
+    public async sellItem(itemId: string, itemQuantity = 1): Promise<number> {
         if (itemQuantity <= 0) {
             return 0;
         }
 
-        const inventoryItems = this.load();
+        const inventoryItems = await this.load();
         const inventoryItemRecord = inventoryItems.find(itemRecord => itemRecord.itemId === itemId && !itemRecord.isEquipped);
 
         if (!inventoryItemRecord || inventoryItemRecord.quantity < itemQuantity) {
@@ -341,7 +356,8 @@ export class InventoryEntity {
 
         const calculatedGoldAmount = this.calculateSellValue(inventoryItemRecord, itemQuantity);
 
-        if (!this.remove(itemId, itemQuantity)) {
+        const removeResult = await this.remove(itemId, itemQuantity);
+        if (!removeResult) {
             return 0;
         }
 

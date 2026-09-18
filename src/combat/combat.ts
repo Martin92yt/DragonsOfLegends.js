@@ -12,7 +12,6 @@ interface ItemDamageBonuses {
 }
 
 export default class Combat {
-    // Rebalanced base critical parameters and added a maximum critical cap to prevent overpowered builds.
     private static readonly BASE_CRIT_RATE = 0.10;
     private static readonly MAX_CRIT_RATE = 0.75;
     private static readonly CRIT_MULTIPLIER = 1.45;
@@ -25,22 +24,13 @@ export default class Combat {
         legendary: 0.35
     };
 
-    /**
-     * Creates a combat instance.
-     *
-     * @param playerEntity The player participating in the combat.
-     * @param enemyEntity The enemy participating in the combat.
-     * @returns void
-     */
     public constructor(public readonly playerEntity: PlayerEntity, public readonly enemyEntity: EnemyEntity) {}
 
     /**
      * Executes one combat turn.
-     *
-     * @returns The result of the combat turn.
      */
-    public attack(): CombatResult {
-        const inflictedEnemyDamage = this.executePlayerTurn();
+    public async attack(): Promise<CombatResult> {
+        const inflictedEnemyDamage = await this.executePlayerTurn();
 
         if (!this.enemyEntity.isAlive()) {
             return this.handleEnemyDefeat(inflictedEnemyDamage);
@@ -52,8 +42,8 @@ export default class Combat {
     /**
      * Executes the player's attack action.
      */
-    private executePlayerTurn(): number {
-        const rawPlayerDamageOutput = this.getPlayerDamage();
+    private async executePlayerTurn(): Promise<number> {
+        const rawPlayerDamageOutput = await this.getPlayerDamage();
         return this.enemyEntity.takeDamage(rawPlayerDamageOutput);
     }
 
@@ -78,9 +68,11 @@ export default class Combat {
     /**
      * Executes the enemy's counter-attack action.
      */
-    private executeEnemyTurn(inflictedEnemyDamage: number): CombatResult {
+    private async executeEnemyTurn(inflictedEnemyDamage: number): Promise<CombatResult> {
         const rawEnemyAttackDamage = Math.max(1, this.enemyEntity.strength);
-        const playerDamageReductionResult = this.playerEntity.takeDamage(rawEnemyAttackDamage);
+        
+        // 🛡️ Ajout du 'await' indispensable ici
+        const playerDamageReductionResult = await this.playerEntity.takeDamage(rawEnemyAttackDamage);
         const finalPlayerDamageTaken = playerDamageReductionResult?.reducedDamage ?? rawEnemyAttackDamage;
         const isPlayerDefeated = !this.playerEntity.isAlive();
 
@@ -100,22 +92,20 @@ export default class Combat {
 
     /**
      * Calculates the damage dealt by the player.
-     *
-     * @returns The final calculated damage.
      */
-    private getPlayerDamage(): number {
+    private async getPlayerDamage(): Promise<number> {
         const basePlayerAttackStat = this.getPlayerAttackStat();
         const randomDamageRoll = Math.floor(Math.random() * 5) - 2;
         let totalCalculatedDamage = basePlayerAttackStat + randomDamageRoll;
 
-        const equippedInventoryItems = this.playerEntity.inventory?.getItems() ?? [];
+        const equippedInventoryItems = await this.playerEntity.inventory?.getItems() ?? [];
         const accumulatedItemBonuses = this.aggregateItemBonuses(equippedInventoryItems);
 
         totalCalculatedDamage += accumulatedItemBonuses.flatBonus;
         totalCalculatedDamage *= 1 + accumulatedItemBonuses.percentageBonus;
 
         if (equippedInventoryItems.length > 0) {
-            this.playerEntity.inventory?.save(equippedInventoryItems);
+            await this.playerEntity.inventory?.save(equippedInventoryItems);
         }
 
         const totalCriticalRate = Math.min(
@@ -163,8 +153,6 @@ export default class Combat {
 
     /**
      * Gets the player's base attack stat according to their class.
-     *
-     * @returns The base attack stat.
      */
     private getPlayerAttackStat(): number {
         const classAttributeMap: Readonly<Record<string, number>> = {
@@ -184,9 +172,6 @@ export default class Combat {
 
     /**
      * Extracts combat bonuses from an equipped item.
-     *
-     * @param inventoryItemRecord The equipped inventory item.
-     * @returns The combat bonuses provided by the item.
      */
     private getItemDamageBonuses(inventoryItemRecord: InventoryItemRecord): ItemDamageBonuses {
         const itemDataNBT: ItemNBT = inventoryItemRecord.itemNbtData ?? {};
@@ -209,9 +194,6 @@ export default class Combat {
 
     /**
      * Applies durability loss to an equipped item that contributes to combat.
-     *
-     * @param inventoryItemRecord The equipped inventory item.
-     * @returns void
      */
     private applyItemDurability(inventoryItemRecord: InventoryItemRecord): void {
         const itemDataNBT = inventoryItemRecord.itemNbtData;
@@ -236,8 +218,6 @@ export default class Combat {
 
     /**
      * Checks whether the combat has ended.
-     *
-     * @returns True when either participant is no longer alive, false otherwise.
      */
     public isFinished(): boolean {
         return !this.playerEntity.isAlive() || !this.enemyEntity.isAlive();

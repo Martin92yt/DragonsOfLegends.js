@@ -18,12 +18,14 @@ export function handlePlayerDeath(player: PlayerEntity): DeathResult {
     const deathMode = worldOptions.deathMode ?? "cooldown";
 
     consola.warn(`💀 Player ${player.name} has died! Death Mode: ${deathMode}`);
+    player.worldInstance.combat.clear(player.id);
 
     switch (deathMode) {
         case "hardcore": {
             player.isDead = true;
             consola.error(`🔥 Hardcore death: ${player.name} has lost everything permanently.`);
             player.worldInstance.players.delete(player.id);
+            player.worldInstance.players.save(player);
             return { mode: "hardcore", deleted: true };
         }
 
@@ -42,6 +44,7 @@ export function handlePlayerDeath(player: PlayerEntity): DeathResult {
             player.health.current = player.health.max; // Réanimation directe avec pénalité
             
             consola.info(`💸 Loose death: ${player.name} lost ${lostGold} gold (${penaltyRate}% penalty).`);
+            player.worldInstance.players.save(player);
             return { mode: "loose", lostGold };
         }
 
