@@ -24,4 +24,13 @@ export enum EnemyType {
 
 export type EnemyTypeId = `${EnemyType}`;
 
-export const isEnemyType = (value: string): value is EnemyType => Object.values(EnemyType).includes(value as EnemyType);
+// Cache values in a Set to optimize validation performance from O(N) to O(1)
+const VALID_ENEMY_TYPE_SET: ReadonlySet<unknown> = new Set(Object.values(EnemyType));
+
+/**
+ * Checks if an unknown value is a valid enemy type.
+ *
+ * @param candidateValue The value to check.
+ * @returns True if the value is a valid enemy type, false otherwise.
+ */
+export const isEnemyType = (candidateValue: unknown): candidateValue is EnemyType => VALID_ENEMY_TYPE_SET.has(candidateValue);

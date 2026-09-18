@@ -1,54 +1,75 @@
 import { EquipmentSlot, ItemCategory, ItemRarity } from "./item.enum.js";
 
+/**
+ * Represents custom metadata, modifiers, or stats attached to an item instance.
+ */
 export interface ItemNBT {
-    XPBonus?: number;
+    experienceBonus?: number;
     damageBonus?: number;
     healthBonus?: number;
     defenseBonus?: number;
-    critRateBonus?: number;
+    criticalHitRateBonus?: number;
     durability?: number;
     [key: string]: unknown;
 }
 
+/**
+ * Represents the core definition and static properties of an item.
+ */
 export interface Item {
-    itemId: string;
-    name: string;
-    category: ItemCategory;
-    rarity: ItemRarity;
-    maxStack?: number;
-    description?: string;
+    readonly itemId: string;
+    readonly name: string;
+    readonly category: ItemCategory;
+    readonly rarity: ItemRarity;
+    readonly maxStack?: number;
+    readonly description?: string;
 }
 
+/**
+ * Alias representing a static item definition template.
+ */
 export type ItemDefinition = Item;
 
+/**
+ * Parameters required to add an item to an inventory or collection.
+ */
 export interface AddItemParameters {
-    type: string;
-    number: number;
-    data?: ItemNBT;
+    readonly itemId: string;
+    readonly quantity: number;
+    readonly itemNbtData?: ItemNBT;
 }
 
+/**
+ * Parameters required to remove an item from an inventory or collection.
+ */
 export interface RemoveItemParameters {
-    type: string;
-    number: number;
+    readonly itemId: string;
+    readonly quantity: number;
 }
 
+/**
+ * Represents an individual item instance record stored within a player's inventory.
+ */
 export interface InventoryItemRecord extends Item {
-    playerId: string;
+    readonly playerId: string;
     quantity: number;
-    data?: ItemNBT | null;
+    itemNbtData?: ItemNBT | null;
     isEquipped?: boolean;
     equipmentSlot?: EquipmentSlot | null;
 }
 
+/**
+ * Represents the active equipment configuration slots mapped to a player.
+ */
 export interface EquipmentRecord {
     playerId: string;
-    helmet: string | null;
-    chest: string | null;
-    leggings: string | null;
-    boots: string | null;
-    sword: string | null;
-    shield: string | null;
-    amulet1: string | null;
-    amulet2: string | null;
-    amulet3: string | null;
+    helmetItemId: string | null;
+    chestItemId: string | null;
+    leggingsItemId: string | null;
+    bootsItemId: string | null;
+    swordItemId: string | null;
+    shieldItemId: string | null;
+    amuletOneItemId: string | null;
+    amuletTwoItemId: string | null;
+    amuletThreeItemId: string | null;
 }

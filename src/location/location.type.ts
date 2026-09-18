@@ -6,6 +6,13 @@ export enum LocationType {
 
 export type LocationTypeId = `${LocationType}`;
 
-export const isLocationType = (value: unknown): value is LocationType => {
-    return typeof value === "string" && Object.values(LocationType).includes(value as LocationType);
-};
+const VALID_LOCATION_TYPES: ReadonlySet<unknown> = new Set(Object.values(LocationType));
+
+/**
+ * Checks whether an unknown value is a valid location type.
+ *
+ * @param potentialLocationType The value to check.
+ * @returns True if the value is a valid LocationType, false otherwise.
+ */
+export const isLocationType = (potentialLocationType: unknown): potentialLocationType is LocationType =>
+    VALID_LOCATION_TYPES.has(potentialLocationType);

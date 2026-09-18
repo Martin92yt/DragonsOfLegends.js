@@ -1,6 +1,6 @@
 import { LocationFlags, hasFlag } from "./location.flags.js";
 import { LocationCreateParametres, LocationCreateResult } from "./location.interface.js";
-import { Logger } from "../utils/logger.js";
+import { consola } from "consola";
 import { LocationBuilder } from "./location.builder.js";
 import {
     BoatWaterFlagRequiredError,
@@ -14,250 +14,298 @@ import {
     UnreachableLocationsError
 } from "../types/error.js";
 
-type TransportMode = "land" | "boat";
-type LocationConnection = LocationCreateResult["connections"][TransportMode];
+type TransportMode = "landRoutes" | "boatRoutes";
+type LocationConnection = LocationCreateResult["travelConnections"][TransportMode];
 
 export default class LocationManager {
-    readonly #logger = new Logger({ context: "LocationManager" });
-    private readonly locations = new Map<string, LocationCreateResult>();
+    private readonly locationsMap = new Map<string, LocationCreateResult>();
+    private static readonly TRANSPORT_MODES: readonly TransportMode[] = ["landRoutes", "boatRoutes"];
 
     /**
      * Creates multiple locations from parameters or builders.
      *
-     * @param items Location parameters or builders.
-     * @returns The created locations.
+     * @param locationItems The location parameters or location builders.
+     * @returns An array of created location results.
      */
-    public bulkCreate(items: readonly (LocationCreateParametres | LocationBuilder)[]): LocationCreateResult[] {
-        return items.map((item) => this.create(item instanceof LocationBuilder ? item.build() : item));
+    public bulkCreate(locationItems: readonly (LocationCreateParametres | LocationBuilder)[]): LocationCreateResult[] {
+        return locationItems.map(item => this.create(item instanceof LocationBuilder ? item.build() : item));
     }
 
     /**
      * Creates a location builder.
      *
-     * @param id Location identifier.
-     * @returns A location builder.
+     * @param locationId The location identifier.
+     * @returns A new location builder instance.
      */
-    public add(id: string): LocationBuilder {
-        return new LocationBuilder(id);
+    public add(locationId: string): LocationBuilder {
+        return new LocationBuilder(locationId);
     }
 
     /**
      * Creates and registers a location.
      *
-     * @param params Location creation parameters.
-     * @returns The created location.
+     * @param creationParameters The location creation parameters.
+     * @returns The created location result.
      */
-    public create(params: LocationCreateParametres): LocationCreateResult {
-        if (this.locations.has(params.id)) {
-            throw new LocationAlreadyExistsError(params.id);
+    public create(creationParameters: LocationCreateParametres): LocationCreateResult {
+        if (this.locationsMap.has(creationParameters.locationId)) {
+            consola.error(`Attempt to create already existing location: ${creationParameters.locationId}`);
+            throw new LocationAlreadyExistsError(creationParameters.locationId);
         }
 
-        const rawFlags = params.flags ?? LocationFlags.None;
-        const flags = Array.isArray(rawFlags) ? rawFlags.reduce((result, flag) => result | flag, 0) : rawFlags;
-        const location: LocationCreateResult = {
-            id: params.id,
-            type: params.type,
-            flags,
-            connections: {
-                land: params.connections?.land ?? [],
-                boat: params.connections?.boat ?? []
+        const rawFlags = creationParameters.locationFlags ?? LocationFlags.None;
+        const resolvedFlags = Array.isArray(rawFlags)
+            ? rawFlags.reduce((accumulatedFlags, singleFlag) => accumulatedFlags | singleFlag, 0)
+            : rawFlags;
+
+        const createdLocationResult: LocationCreateResult = {
+            locationId: creationParameters.locationId,
+            locationType: creationParameters.locationType,
+            locationFlags: resolvedFlags,
+            travelConnections: {
+                landRoutes: creationParameters.travelConnections?.landRoutes ?? [],
+                boatRoutes: creationParameters.travelConnections?.boatRoutes ?? []
             }
         };
 
-        this.locations.set(location.id, location);
-        return location;
+        this.locationsMap.set(createdLocationResult.locationId, createdLocationResult);
+        return createdLocationResult;
     }
 
     /**
      * Creates a bidirectional connection between two locations.
      *
-     * @param fromId Source location identifier.
-     * @param toId Target location identifier.
-     * @param transport Transport mode.
-     * @param distance Connection distance.
-     * @param danger Connection danger level.
+     * @param sourceLocationId The source location identifier.
+     * @param targetLocationId The target location identifier.
+     * @param transportMode The transport mode for the connection.
+     * @param connectionDistance The connection distance.
+     * @param connectionDanger The connection danger level.
+     * @returns void
      */
-    public link(fromId: string, toId: string, transport: TransportMode, distance = 1, danger = 0): void {
-        const from = this.locations.get(fromId);
-        const to = this.locations.get(toId);
+    public link(
+        sourceLocationId: string,
+        targetLocationId: string,
+        transportMode: TransportMode,
+        connectionDistance = 1,
+        connectionDanger = 0
+    ): void {
+        const sourceLocation = this.locationsMap.get(sourceLocationId);
+        const targetLocation = this.locationsMap.get(targetLocationId);
 
-        if (!from || !to) {
-            throw new LocationInexistentLinkError(fromId, toId);
+        if (!sourceLocation || !targetLocation) {
+            consola.error(`Failed to link non-existent locations: ${sourceLocationId} -> ${targetLocationId}`);
+            throw new LocationInexistentLinkError(sourceLocationId, targetLocationId);
         }
 
-        const fromConnections: LocationConnection = from.connections[transport];
-        const toConnections: LocationConnection = to.connections[transport];
+        this.ensureConnection(sourceLocation.travelConnections[transportMode], targetLocationId, connectionDistance, connectionDanger);
+        this.ensureConnection(targetLocation.travelConnections[transportMode], sourceLocationId, connectionDistance, connectionDanger);
+    }
 
-        if (!fromConnections.some((connection) => connection.targetId === toId)) {
-            fromConnections.push({ targetId: toId, distance, danger });
+    /**
+     * Ensures a connection exists within a connection array, appending it if absent.
+     */
+    private ensureConnection(
+        connectionList: LocationConnection,
+        targetLocationId: string,
+        connectionDistance: number,
+        connectionDanger: number
+    ): void {
+        if (!connectionList.some(existingConnection => existingConnection.destinationLocationId === targetLocationId)) {
+            connectionList.push({ destinationLocationId: targetLocationId, travelDistance: connectionDistance, dangerLevel: connectionDanger });
         }
-
-        if (!toConnections.some((connection) => connection.targetId === fromId)) {
-            toConnections.push({ targetId: fromId, distance, danger });
-        }
-
-        this.#logger.debug(`Linked locations via ${transport}: ${fromId} <-> ${toId} (distance: ${distance}, danger: ${danger}).`);
     }
 
     /**
      * Gets a location by identifier.
      *
-     * @param id Location identifier.
-     * @returns The location if found.
+     * @param locationId The location identifier.
+     * @returns The location result if found, otherwise undefined.
      */
-    public get(id: string): LocationCreateResult | undefined {
-        return this.locations.get(id);
+    public get(locationId: string): LocationCreateResult | undefined {
+        return this.locationsMap.get(locationId);
     }
 
     /**
      * Checks whether a location exists.
      *
-     * @param id Location identifier.
-     * @returns True if the location exists.
+     * @param locationId The location identifier.
+     * @returns True if the location exists, false otherwise.
      */
-    public has(id: string): boolean {
-        return this.locations.has(id);
+    public has(locationId: string): boolean {
+        return this.locationsMap.has(locationId);
     }
 
     /**
      * Serializes all locations.
      *
-     * @returns Serialized location data.
+     * @returns A JSON string containing serialized location data.
      */
     public serialize(): string {
-        return JSON.stringify([...this.locations.values()], null, 2);
+        return JSON.stringify([...this.locationsMap.values()], null, 2);
     }
 
     /**
      * Replaces the current locations with serialized or structured data.
      *
-     * @param data Serialized location data or location objects.
+     * @param serializedData The serialized location data string or location objects array.
+     * @returns void
      */
-    public deserialize(data: string | readonly LocationCreateResult[]): void {
-        const locations: LocationCreateResult[] = typeof data === "string" ? JSON.parse(data) as LocationCreateResult[] : [...data];
+    public deserialize(serializedData: string | readonly LocationCreateResult[]): void {
+        const parsedLocations = typeof serializedData === "string"
+            ? (JSON.parse(serializedData) as LocationCreateResult[])
+            : [...serializedData];
 
-        this.locations.clear();
+        this.locationsMap.clear();
 
-        for (const location of locations) {
-            this.create(location);
+        for (const locationRecord of parsedLocations) {
+            this.create(locationRecord);
         }
 
         this.validate();
-        this.#logger.info(`Successfully deserialized and validated ${locations.length} locations.`);
+        consola.success(`Deserialized ${parsedLocations.length} locations.`);
     }
 
     /**
      * Validates the complete location graph.
+     *
+     * @returns void
      */
     public validate(): void {
-        const startingCity = this.validateStartingCity();
+        const startingCityLocation = this.validateStartingCity();
 
         this.validateConnections();
-        this.validateReachability(startingCity.id);
-        this.#logger.info(`All ${this.locations.size} locations validated successfully.`);
+        this.validateReachability(startingCityLocation.locationId);
+        consola.success(`Validated ${this.locationsMap.size} locations.`);
     }
 
     /**
      * Finds and validates the unique starting city.
      *
-     * @returns The starting city.
+     * @returns The starting city location result.
      */
     private validateStartingCity(): LocationCreateResult {
-        const startingCities = [...this.locations.values()].filter((location) => hasFlag(location.flags, LocationFlags.StarterCity));
+        const starterCityList = [...this.locationsMap.values()].filter(locationRecord =>
+            hasFlag(locationRecord.locationFlags, LocationFlags.StarterCity)
+        );
 
-        if (startingCities.length === 0) {
+        if (starterCityList.length === 0) {
+            consola.error("No starting city defined in the location graph.");
             throw new NoStartingCityError();
         }
 
-        if (startingCities.length > 1) {
-            throw new MultipleStartingCitiesError(startingCities.map((location) => location.id));
+        if (starterCityList.length > 1) {
+            const cityIds = starterCityList.map(locationRecord => locationRecord.locationId);
+            consola.error(`Multiple starting cities found: ${cityIds.join(", ")}`);
+            throw new MultipleStartingCitiesError(cityIds);
         }
 
-        return startingCities[0];
+        return starterCityList[0];
     }
 
     /**
      * Validates all location connections.
+     *
+     * @returns void
      */
     private validateConnections(): void {
-        const transportModes: readonly TransportMode[] = ["land", "boat"];
-
-        for (const location of this.locations.values()) {
-            for (const mode of transportModes) {
-                for (const connection of location.connections[mode]) {
-                    const destinationId = connection.targetId;
-
-                    if (destinationId === location.id) {
-                        throw new SelfConnectionError(location.id, mode);
-                    }
-
-                    const destination = this.locations.get(destinationId);
-
-                    if (!destination) {
-                        throw new InvalidConnectionTargetError(location.id, mode, destinationId);
-                    }
-
-                    const isReciprocal = destination.connections[mode].some((entry) => entry.targetId === location.id);
-
-                    if (!isReciprocal) {
-                        throw new NonReciprocalConnectionError(mode, location.id, destination.id);
-                    }
-
-                    if (mode === "boat" && (!hasFlag(location.flags, LocationFlags.OnWater) || !hasFlag(destination.flags, LocationFlags.OnWater))) {
-                        throw new BoatWaterFlagRequiredError(location.id, destinationId);
-                    }
+        for (const locationRecord of this.locationsMap.values()) {
+            for (const transportMode of LocationManager.TRANSPORT_MODES) {
+                for (const connectionRecord of locationRecord.travelConnections[transportMode]) {
+                    this.validateSingleConnection(locationRecord, connectionRecord, transportMode);
                 }
             }
+        }
+    }
+
+    /**
+     * Validates an individual connection entry.
+     */
+    private validateSingleConnection(
+        sourceLocation: LocationCreateResult,
+        connectionRecord: LocationConnection[number],
+        transportMode: TransportMode
+    ): void {
+        const targetLocationId = connectionRecord.destinationLocationId;
+
+        if (targetLocationId === sourceLocation.locationId) {
+            consola.error(`Location ${sourceLocation.locationId} has a self-connection on ${transportMode}.`);
+            throw new SelfConnectionError(sourceLocation.locationId, transportMode);
+        }
+
+        const targetLocation = this.locationsMap.get(targetLocationId);
+
+        if (!targetLocation) {
+            consola.error(`Location ${sourceLocation.locationId} connects to non-existent target ${targetLocationId} on ${transportMode}.`);
+            throw new InvalidConnectionTargetError(sourceLocation.locationId, transportMode, targetLocationId);
+        }
+
+        const isReciprocal = targetLocation.travelConnections[transportMode].some(
+            reverseConnection => reverseConnection.destinationLocationId === sourceLocation.locationId
+        );
+
+        if (!isReciprocal) {
+            consola.error(`Non-reciprocal connection between ${sourceLocation.locationId} and ${targetLocation.locationId} on ${transportMode}.`);
+            throw new NonReciprocalConnectionError(transportMode, sourceLocation.locationId, targetLocation.locationId);
+        }
+
+        if (
+            transportMode === "boatRoutes" &&
+            (!hasFlag(sourceLocation.locationFlags, LocationFlags.OnWater) || !hasFlag(targetLocation.locationFlags, LocationFlags.OnWater))
+        ) {
+            consola.error(`Boat connection requires water flags between ${sourceLocation.locationId} and ${targetLocationId}.`);
+            throw new BoatWaterFlagRequiredError(sourceLocation.locationId, targetLocationId);
         }
     }
 
     /**
      * Validates that every non-teleport-only location is reachable.
      *
-     * @param startId Starting location identifier.
+     * @param startingLocationId The starting location identifier.
+     * @returns void
      */
-    private validateReachability(startId: string): void {
-        const visited = new Set<string>([startId]);
-        const queue: string[] = [startId];
+    private validateReachability(startingLocationId: string): void {
+        const visitedLocationIds = new Set<string>([startingLocationId]);
+        const traversalQueue: string[] = [startingLocationId];
 
-        while (queue.length > 0) {
-            const currentId = queue.shift();
+        while (traversalQueue.length > 0) {
+            const currentId = traversalQueue.shift();
 
             if (!currentId) {
                 continue;
             }
 
-            const current = this.locations.get(currentId);
+            const currentLocation = this.locationsMap.get(currentId);
 
-            if (!current) {
+            if (!currentLocation) {
                 continue;
             }
 
-            const connections = [...current.connections.land, ...current.connections.boat];
+            const allConnections = [...currentLocation.travelConnections.landRoutes, ...currentLocation.travelConnections.boatRoutes];
 
-            for (const connection of connections) {
-                if (visited.has(connection.targetId)) {
-                    continue;
+            for (const connectionEntry of allConnections) {
+                if (!visitedLocationIds.has(connectionEntry.destinationLocationId)) {
+                    visitedLocationIds.add(connectionEntry.destinationLocationId);
+                    traversalQueue.push(connectionEntry.destinationLocationId);
                 }
-
-                visited.add(connection.targetId);
-                queue.push(connection.targetId);
             }
         }
 
-        const unreachable = [...this.locations.values()].filter(
-            (location) => !visited.has(location.id) && !hasFlag(location.flags, LocationFlags.TeleportOnly)
+        const unreachableLocations = [...this.locationsMap.values()].filter(
+            locationRecord =>
+                !visitedLocationIds.has(locationRecord.locationId) && !hasFlag(locationRecord.locationFlags, LocationFlags.TeleportOnly)
         );
 
-        if (unreachable.length > 0) {
-            throw new UnreachableLocationsError(unreachable.map((location) => location.id));
+        if (unreachableLocations.length > 0) {
+            const unreachableIds = unreachableLocations.map(locationRecord => locationRecord.locationId);
+            consola.error(`Unreachable locations detected: ${unreachableIds.join(", ")}`);
+            throw new UnreachableLocationsError(unreachableIds);
         }
     }
 
     /**
      * Gets the unique starting city.
      *
-     * @returns The starting city.
+     * @returns The starting city location result.
      */
     public getStartingCity(): LocationCreateResult {
         return this.validateStartingCity();
@@ -266,9 +314,9 @@ export default class LocationManager {
     /**
      * Gets the starting city identifier.
      *
-     * @returns The starting city identifier.
+     * @returns The starting city identifier string.
      */
     public getStartingCityId(): string {
-        return this.validateStartingCity().id;
+        return this.validateStartingCity().locationId;
     }
 }

@@ -6,63 +6,64 @@ import { LocationIdEmptyError } from "../types/error.js";
 export type TransportMode = "land" | "boat";
 
 export interface ConnectionInput {
-    readonly transport: TransportMode;
-    readonly targetId: string;
-    readonly distance?: number;
-    readonly danger?: number;
+    readonly transportMode: TransportMode;
+    readonly targetLocationId: string;
+    readonly connectionDistance?: number;
+    readonly connectionDanger?: number;
 }
 
 export class LocationBuilder {
-    private readonly id: string;
-    private type: LocationType = LocationType.City;
-    private flags: LocationFlags | LocationFlags[] = LocationFlags.None;
-    private landConnections: LocationConnectionRecord[] = [];
-    private boatConnections: LocationConnectionRecord[] = [];
+    private readonly locationId: string;
+    private locationType: LocationType = LocationType.City;
+    private locationFlags: LocationFlags | LocationFlags[] = LocationFlags.None;
+    private landConnectionRecords: LocationConnectionRecord[] = [];
+    private boatConnectionRecords: LocationConnectionRecord[] = [];
 
     /**
      * Creates a location builder.
      *
-     * @param id Location identifier.
+     * @param locationId The location identifier.
+     * @returns void
      */
-    public constructor(id: string) {
-        this.id = id;
+    public constructor(locationId: string) {
+        this.locationId = locationId;
     }
 
     /**
      * Sets the location type.
      *
-     * @param type Location type.
-     * @returns The current builder.
+     * @param locationType The location type.
+     * @returns The current builder instance.
      */
-    public setType(type: LocationType): this {
-        this.type = type;
+    public setType(locationType: LocationType): this {
+        this.locationType = locationType;
         return this;
     }
 
     /**
      * Sets the location flags.
      *
-     * @param flags Location flags.
-     * @returns The current builder.
+     * @param locationFlags The location flags.
+     * @returns The current builder instance.
      */
-    public setFlags(flags: LocationFlags | LocationFlags[]): this {
-        this.flags = flags;
+    public setFlags(locationFlags: LocationFlags | LocationFlags[]): this {
+        this.locationFlags = locationFlags;
         return this;
     }
 
     /**
      * Adds a location flag.
      *
-     * @param flag Flag to add.
-     * @returns The current builder.
+     * @param flagToAdd The flag to add.
+     * @returns The current builder instance.
      */
-    public addFlag(flag: LocationFlags): this {
-        if (Array.isArray(this.flags)) {
-            if (!this.flags.includes(flag)) {
-                this.flags.push(flag);
+    public addFlag(flagToAdd: LocationFlags): this {
+        if (Array.isArray(this.locationFlags)) {
+            if (!this.locationFlags.includes(flagToAdd)) {
+                this.locationFlags.push(flagToAdd);
             }
-        } else {
-            this.flags = [this.flags, flag];
+        } else if (this.locationFlags !== flagToAdd) {
+            this.locationFlags = [this.locationFlags, flagToAdd];
         }
 
         return this;
@@ -71,81 +72,107 @@ export class LocationBuilder {
     /**
      * Replaces all existing connections.
      *
-     * @param connections Connections to set.
-     * @returns The current builder.
+     * @param connectionInputs The connections to set.
+     * @returns The current builder instance.
      */
-    public setConnections(...connections: ConnectionInput[]): this {
-        this.landConnections = [];
-        this.boatConnections = [];
-        return this.addConnections(...connections);
+    public setConnections(...connectionInputs: ConnectionInput[]): this {
+        this.landConnectionRecords = [];
+        this.boatConnectionRecords = [];
+        return this.addConnections(...connectionInputs);
     }
 
     /**
      * Adds one or more connections.
      *
-     * @param connections Connections to add.
-     * @returns The current builder.
+     * @param connectionInputs The connections to add.
+     * @returns The current builder instance.
      */
-    public addConnections(...connections: ConnectionInput[]): this {
-        for (const connection of connections) {
-            const record: LocationConnectionRecord = {
-                targetId: connection.targetId,
-                distance: connection.distance ?? 1,
-                danger: connection.danger ?? 0
-            };
-
-            const targetConnections = connection.transport === "land" ? this.landConnections : this.boatConnections;
-
-            if (!targetConnections.some(({ targetId }) => targetId === connection.targetId)) {
-                targetConnections.push(record);
-            }
+    public addConnections(...connectionInputs: ConnectionInput[]): this {
+        for (const connectionInput of connectionInputs) {
+            const targetConnectionArray = this.getTargetConnections(connectionInput.transportMode);
+            this.appendConnectionIfNotExists(targetConnectionArray, connectionInput);
         }
 
         return this;
     }
 
     /**
+     * Retrieves the specific connection array corresponding to the transport mode.
+     */
+    private getTargetConnections(transportMode: TransportMode): LocationConnectionRecord[] {
+        return transportMode === "land" ? this.landConnectionRecords : this.boatConnectionRecords;
+    }
+
+    /**
+     * Appends a connection record if a record for the target does not already exist.
+     */
+    private appendConnectionIfNotExists(
+        targetConnectionArray: LocationConnectionRecord[],
+        connectionInput: ConnectionInput
+    ): void {
+        const { targetLocationId, connectionDistance = 1, connectionDanger = 0 } = connectionInput;
+        
+        if (!targetConnectionArray.some(existingRecord => existingRecord.destinationLocationId === targetLocationId)) {
+            targetConnectionArray.push({
+                destinationLocationId: targetLocationId,
+                travelDistance: connectionDistance,
+                dangerLevel: connectionDanger
+            });
+        }
+    }
+
+    /**
      * Adds a land connection.
      *
-     * @param targetId Target location identifier.
-     * @param distance Connection distance.
-     * @param danger Connection danger level.
-     * @returns The current builder.
+     * @param targetLocationId The target location identifier.
+     * @param connectionDistance The connection distance.
+     * @param connectionDanger The connection danger level.
+     * @returns The current builder instance.
      */
-    public linkLand(targetId: string, distance = 1, danger = 0): this {
-        return this.addConnections({ transport: "land", targetId, distance, danger });
+    public linkLand(targetLocationId: string, connectionDistance = 1, connectionDanger = 0): this {
+        return this.addConnections({
+            transportMode: "land",
+            targetLocationId,
+            connectionDistance,
+            connectionDanger
+        });
     }
 
     /**
      * Adds a boat connection.
      *
-     * @param targetId Target location identifier.
-     * @param distance Connection distance.
-     * @param danger Connection danger level.
-     * @returns The current builder.
+     * @param targetLocationId The target location identifier.
+     * @param connectionDistance The connection distance.
+     * @param connectionDanger The connection danger level.
+     * @returns The current builder instance.
      */
-    public linkBoat(targetId: string, distance = 1, danger = 0): this {
-        return this.addConnections({ transport: "boat", targetId, distance, danger });
+    public linkBoat(targetLocationId: string, connectionDistance = 1, connectionDanger = 0): this {
+        return this.addConnections({
+            transportMode: "boat",
+            targetLocationId,
+            connectionDistance,
+            connectionDanger
+        });
     }
 
     /**
      * Builds the location creation parameters.
      *
-     * @returns Location creation parameters.
+     * @returns The location creation parameters.
      * @throws LocationIdEmptyError if the location identifier is empty.
      */
     public build(): LocationCreateParametres {
-        if (!this.id.trim()) {
+        if (!this.locationId.trim()) {
             throw new LocationIdEmptyError();
         }
 
         return {
-            id: this.id,
-            type: this.type,
-            flags: this.flags,
-            connections: {
-                land: [...this.landConnections],
-                boat: [...this.boatConnections]
+            locationId: this.locationId,
+            locationType: this.locationType,
+            locationFlags: this.locationFlags,
+            travelConnections: {
+                landRoutes: [...this.landConnectionRecords],
+                boatRoutes: [...this.boatConnectionRecords]
             }
         };
     }

@@ -1,125 +1,141 @@
 import EnemyManager from "../enemy/enemy.manager.js";
-import Player from "../player/player.entity.js";
-import { Logger } from "../utils/logger.js";
+import PlayerEntity from "../player/player.entity.js";
+import { consola } from "consola";
 import Combat from "./combat.js";
 import { CombatResult } from "../types/result.js";
 import { PlayerAlreadyInCombatError, PlayerNotInCombatError } from "../types/error.js";
 import EnemyEntity from "../enemy/enemy.class.js";
 
 export default class CombatManager {
-    private readonly combats = new Map<string, Combat>();
-    private readonly enemies = new EnemyManager();
-    readonly #logger = new Logger({ context: "CombatManager" });
+    private readonly activeCombatMap = new Map<string, Combat>();
+    private readonly enemyManagerInstance = new EnemyManager();
+
+    /**
+     * Checks if a player is already in an active combat.
+     */
+    private ensurePlayerNotInCombat(playerEntity: PlayerEntity): void {
+        const existingCombatInstance = this.activeCombatMap.get(playerEntity.id);
+        if (existingCombatInstance && !existingCombatInstance.isFinished()) {
+            consola.warn(`Combat start failed: player ${playerEntity.name} (${playerEntity.id}) is already in combat.`);
+            throw new PlayerAlreadyInCombatError(playerEntity.id);
+        }
+    }
+
+    /**
+     * Registers and initializes a combat instance for a player.
+     */
+    private registerCombat(playerEntity: PlayerEntity, enemyEntity: EnemyEntity): Combat {
+        this.ensurePlayerNotInCombat(playerEntity);
+        const newCombatInstance = new Combat(playerEntity, enemyEntity);
+        playerEntity.inCombat = true;
+        this.activeCombatMap.set(playerEntity.id, newCombatInstance);
+        consola.success(`Combat started for ${playerEntity.name}.`);
+        return newCombatInstance;
+    }
 
     /**
      * Starts a combat against a randomly selected enemy.
-     * @param player The player starting the combat.
-     * @returns The newly created combat.
-     * @throws PlayerAlreadyInCombatError If the player is already in an active combat.
+     *
+     * @param playerEntity The player starting the combat.
+     * @returns The newly created combat instance.
      */
-    public start(player: Player): Combat {
-        const existingCombat = this.combats.get(player.id);
-        if (existingCombat && !existingCombat.isFinished()) {
-            throw new PlayerAlreadyInCombatError(player.id);
-        }
-        const enemy = this.enemies.create(player);
-        const combat = new Combat(player, enemy);
-        player.inCombat = true;
-        this.combats.set(player.id, combat);
-        this.#logger.info(`Combat started: ${player.name} vs ${enemy.name} (Lv. ${player.level}, ${enemy.health} HP).`);
-        return combat;
+    public start(playerEntity: PlayerEntity): Combat {
+        const generatedEnemyEntity = this.enemyManagerInstance.create(playerEntity);
+        return this.registerCombat(playerEntity, generatedEnemyEntity);
     }
 
     /**
      * Starts a combat against a specific enemy.
-     * @param player The player starting the combat.
-     * @param enemy The enemy to fight.
-     * @returns The newly created combat.
-     * @throws PlayerAlreadyInCombatError If the player is already in an active combat.
+     *
+     * @param playerEntity The player starting the combat.
+     * @param enemyEntity The enemy to fight.
+     * @returns The newly created combat instance.
      */
-    public startWithEnemy(player: Player, enemy: EnemyEntity): Combat {
-        const existingCombat = this.combats.get(player.id);
-        if (existingCombat && !existingCombat.isFinished()) {
-            throw new PlayerAlreadyInCombatError(player.id);
-        }
-        const combat = new Combat(player, enemy);
-        player.inCombat = true;
-        this.combats.set(player.id, combat);
-        this.#logger.info(`Combat started: ${player.name} vs ${enemy.name} (Lv. ${player.level}, ${enemy.health} HP).`);
-        return combat;
+    public startWithEnemy(playerEntity: PlayerEntity, enemyEntity: EnemyEntity): Combat {
+        return this.registerCombat(playerEntity, enemyEntity);
     }
 
     /**
      * Performs an attack for a player in combat.
-     * @param playerId The player's identifier.
+     *
+     * @param targetPlayerId The player's identifier.
      * @returns The result of the attack.
-     * @throws PlayerNotInCombatError If the player has no active combat.
      */
-    public attack(playerId: string): CombatResult {
-        const combat = this.combats.get(playerId);
-        if (!combat) {
-            throw new PlayerNotInCombatError(playerId);
+    public attack(targetPlayerId: string): CombatResult {
+        const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
+        if (!activeCombatInstance) {
+            consola.warn(`Attack failed: player with ID ${targetPlayerId} is not in combat.`);
+            throw new PlayerNotInCombatError(targetPlayerId);
         }
-        const result = combat.attack();
-        if (result.victory || result.defeat) {
-            this.clear(playerId);
+
+        const combatTurnResult = activeCombatInstance.attack();
+        if (combatTurnResult.victory || combatTurnResult.defeat) {
+            this.clear(targetPlayerId);
         }
-        return result;
+        return combatTurnResult;
     }
 
     /**
      * Checks whether a player has an active combat.
-     * @param playerId The player's identifier.
-     * @returns True if the player has an active combat.
+     *
+     * @param targetPlayerId The player's identifier.
+     * @returns True if the player has an active combat, false otherwise.
      */
-    public has(playerId: string): boolean {
-        return this.combats.has(playerId);
+    public has(targetPlayerId: string): boolean {
+        return this.activeCombatMap.has(targetPlayerId);
     }
 
     /**
      * Retrieves a player's active combat.
-     * @param playerId The player's identifier.
+     *
+     * @param targetPlayerId The player's identifier.
      * @returns The active combat or undefined if none exists.
      */
-    public get(playerId: string): Combat | undefined {
-        return this.combats.get(playerId);
+    public get(targetPlayerId: string): Combat | undefined {
+        const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
+        if (!activeCombatInstance) {
+            consola.warn(`Failed to retrieve active combat for player ID ${targetPlayerId}.`);
+        }
+        return activeCombatInstance;
     }
 
     /**
      * Removes a player's active combat.
-     * @param playerId The player's identifier.
-     * @returns True if a combat was removed.
+     *
+     * @param targetPlayerId The player's identifier.
+     * @returns True if a combat was removed, false otherwise.
      */
-    public clear(playerId: string): boolean {
-        const combat = this.combats.get(playerId);
-        if (combat) {
-            combat.player.inCombat = false;
+    public clear(targetPlayerId: string): boolean {
+        const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
+        if (activeCombatInstance) {
+            activeCombatInstance.playerEntity.inCombat = false;
         }
-        return this.combats.delete(playerId);
+        return this.activeCombatMap.delete(targetPlayerId);
     }
 
     /**
      * Gets the number of active combats.
+     *
      * @returns The number of active combats.
      */
     public get size(): number {
-        return this.combats.size;
+        return this.activeCombatMap.size;
     }
 
     /**
-     * Stops all active combats and compensates affected players.
-     * @returns void.
+     * Stops all active combats and safely compensates affected players with balanced values.
+     *
+     * @returns void
      */
     public stopAllCombats(): void {
-        this.#logger.info("Stopping all active combats...");
-        for (const combat of this.combats.values()) {
-            const player = combat.player;
-            const compensationXp = player.level * 10;
-            player.addXP(compensationXp);
-            player.gold += player.gold * 0.01;
-            player.inCombat = false;
-            this.#logger.info(`Combat stopped for ${player.name}. Compensation granted: +${compensationXp} XP.`);
+        for (const activeCombatInstance of this.activeCombatMap.values()) {
+            const affectedPlayerEntity = activeCombatInstance.playerEntity;
+            // Rebalanced compensation scaling to prevent runaway inflation during global resets.
+            affectedPlayerEntity.addXP(affectedPlayerEntity.level * 5);
+            affectedPlayerEntity.gold += Math.floor(affectedPlayerEntity.gold * 0.005);
+            affectedPlayerEntity.inCombat = false;
         }
-        this.combats.clear();
+        this.activeCombatMap.clear();
+        consola.success("All active combats stopped.");
     }
 }

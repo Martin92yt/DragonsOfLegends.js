@@ -1,6 +1,6 @@
 <div align="center">
 
-### [📚 Documentation](https://martin92yt.github.io/DragonsOfLegends.js/) • [📦 NPM](https://www.npmjs.com/package/dragons-of-legends.js) • [🗺️ Trello](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs) • [🐙 GitHub](https://github.com/Martin92yt/DragonsOfLegends.js) • [💬 Discord](https://discord.gg/bwCkQEFWEt)
+### [📚 Documentation](https://martin92yt.github.io/DragonsOfLegends.js/) • [🌐 Demo](https://dragons-of-legends-web.vercel.app) • [📦 NPM](https://www.npmjs.com/package/dragons-of-legends.js) • [🗺️ Trello](https://trello.com/b/Tj4XzGtn/dragonsoflegendsjs) • [🐙 GitHub](https://github.com/Martin92yt/DragonsOfLegends.js) • [💬 Discord](https://discord.gg/bwCkQEFWEt)
 
 </div>
 
@@ -11,13 +11,16 @@
 <div> 
   <p> 
     <a href="https://www.npmjs.com/package/dragons-of-legends.js"> <img src="https://img.shields.io/npm/v/dragons-of-legends.js?style=for-the-badge&logo=npm&logoColor=white&label=Version&color=CB3837" alt="NPM Version"> </a> 
+    <a href="https://dragons-of-legends-web.vercel.app"> 
+      <img src="https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=rocket&logoColor=white" alt="Live Demo"> 
+    </a>
     <a href="https://www.npmjs.com/package/dragons-of-legends.js"> <img src="https://img.shields.io/npm/dt/dragons-of-legends.js?style=for-the-badge&logo=npm&logoColor=white&label=Downloads&color=CB3837" alt="NPM Downloads"> </a> 
     <a href="https://discord.gg/bwCkQEFWEt"> <img src="https://img.shields.io/discord/1547998188621799476?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord Server"> </a> 
     <a href="https://github.com/Martin92yt/DragonsOfLegends.js/commits/main"> <img src="https://img.shields.io/github/last-commit/Martin92yt/DragonsOfLegends.js?style=for-the-badge&logo=git&logoColor=white&label=Last%20update&color=F05032" alt="Last update"> </a> 
   </p> 
 </div>
 
-> **⚠️ Under Development:** This project is currently in alpha. The syntax, methods, and API structure are subject to change before the first stable release.
+> 🚀 **Want to try it out right away?** Give our [Online Demo](https://dragons-of-legends-web.vercel.app) a spin to see the library in action!
 
 ## About
 

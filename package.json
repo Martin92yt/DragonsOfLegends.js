@@ -1,6 +1,6 @@
 {
   "name": "dragons-of-legends.js",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0",
   "description": "A TypeScript library for creating and structuring your text-based RPGs.",
   "keywords": [
     "rpg",
@@ -36,12 +36,14 @@
     "build": "tsc",
     "docs": "typedoc",
     "start:bot": "tsx ../demos/src/index.ts",
-    "start:example": "tsx ../sandbox/example.ts",
+    "ex": "tsx ./example.ts",
+    "start:example": "tsx ../demo/src/app.ts",
     "publish:alpha": "npm version prerelease --preid=alpha --no-git-tag-version && npm run build && npm publish --tag alpha --access public",
     "publish": "npm version patch --no-git-tag-version && npm run build && npm publish --tag latest --access public"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "^13.0.3",
+    "consola": "^3.4.2"
   },
   "devDependencies": {
     "@clean-jsdoc-theme/typedoc": "^5.2.0",

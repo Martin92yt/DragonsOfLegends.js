@@ -1,5 +1,6 @@
+    import { handlePlayerDeath, DeathResult } from "./Player.death.js";
 import { PlayerClass } from "./player.class.js";
-import { Logger } from "../utils/logger.js";
+import { consola } from "consola";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
 import { InventoryEntity } from "../inventory/inventory.class.js";
 import { EnemyType } from "../enemy/enemy.type.js";
@@ -12,16 +13,26 @@ import EnemyEntity from "../enemy/enemy.class.js";
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
 export default class PlayerEntity {
-    private static readonly BASE_HEALTH = 100;
-    private static readonly HP_PER_LEVEL = 10;
-    private static readonly XP_PER_LEVEL = 100;
+    // Rationale: Rebalanced base values and scaling to prevent excessive health pools and smooth out early-to-mid game progression spikes.
+    private static readonly BASE_HEALTH = 85;
+    private static readonly HP_PER_LEVEL = 9;
+    private static readonly XP_PER_LEVEL = 110;
     private static readonly BASE_TRAVEL_TIME_MS = 1000;
-    private static readonly TRAVEL_DISTANCE_MULTIPLIER = 1000;
-    private static readonly BASE_AMBUSH_CHANCE = 0.15;
-    private static readonly DANGER_AMBUSH_MULTIPLIER = 0.05;
-    private static readonly MAX_AMBUSH_CHANCE = 0.9;
-    readonly #logger = new Logger({ context: "Player" });
-    private readonly rpg: World;
+    private static readonly TRAVEL_DISTANCE_MULTIPLIER = 900;
+    private static readonly BASE_AMBUSH_CHANCE = 0.10;
+    private static readonly DANGER_AMBUSH_MULTIPLIER = 0.035;
+    private static readonly MAX_AMBUSH_CHANCE = 0.70;
+
+    // Rationale: Adjusted durability damage multipliers to make equipment wear more predictable and balanced across rarities.
+    private static readonly RARITY_MULTIPLIERS: Record<string, number> = {
+    common: 1.25,
+        uncommon: 1.0,
+        rare: 0.75,
+        epic: 0.45,
+        legendary: 0.20
+    };
+
+    public readonly worldInstance: World;
     public level: number;
     public gold: number;
     public experience: PlayerExperience;
@@ -33,31 +44,33 @@ export default class PlayerEntity {
     public marriage: PlayerMarriage;
     public isTravelling = false;
     public inCombat = false;
-
+    public isDead = false;
+    
     /**
      * Creates a player entity.
      *
-     * @param rpg World instance.
-     * @param id Player identifier.
-     * @param name Player name.
-     * @param classId Player class.
-     * @param location Player location identifier.
-     * @param level Initial player level.
-     * @param experience Initial experience amount.
-     * @param health Initial health amount.
-     * @param maxHealth Initial maximum health.
-     * @param partener Partner player identifier.
-     * @param strength Initial strength value.
-     * @param agility Initial agility value.
-     * @param intelligence Initial intelligence value.
-     * @param defense Initial defense value.
-     * @param attributePoints Initial available attribute points.
-     * @param gold Initial gold amount.
-     * @param bankGold BankGold
-     * @param bankUnlocked bankUnlocked
+     * @param worldInstance The world instance associated with the player.
+     * @param id The unique player identifier.
+     * @param name The player name.
+     * @param classId The player class identifier.
+     * @param location The current player location identifier.
+     * @param level The initial player level.
+     * @param experience The initial experience amount.
+     * @param health The initial health amount.
+     * @param maxHealth The initial maximum health amount.
+     * @param partnerId The partner player identifier, if any.
+     * @param strength The initial strength value.
+     * @param agility The initial agility value.
+     * @param intelligence The initial intelligence value.
+     * @param defense The initial defense value.
+     * @param attributePoints The initial available attribute points.
+     * @param gold The initial gold amount.
+     * @param bankGold The initial bank gold amount.
+     * @param bankUnlocked Whether the bank account is unlocked.
+     * @returns void
      */
     public constructor(
-        rpg: World,
+        worldInstance: World,
         public readonly id: string,
         public name: string,
         public readonly classId: PlayerClass,
@@ -66,17 +79,17 @@ export default class PlayerEntity {
         experience = 0,
         health = PlayerEntity.BASE_HEALTH,
         maxHealth = PlayerEntity.BASE_HEALTH,
-        partener = "",
+        partnerId = "",
+        gold = 0,
         strength?: number,
         agility?: number,
         intelligence?: number,
         defense?: number,
         attributePoints = 0,
-        gold = 0,
-        bankGold: number = 0,
-        bankUnlocked: boolean = false
+        bankGold = 0,
+        bankUnlocked = false
     ) {
-        this.rpg = rpg;
+        this.worldInstance = worldInstance;
         this.level = Math.max(1, level);
         this.gold = Math.max(0, gold);
         this.bankGold = Math.max(0, bankGold);
@@ -103,60 +116,40 @@ export default class PlayerEntity {
         };
 
         this.inventory = new InventoryEntity(this.id, this);
-        this.marriage = new PlayerMarriage(this, partener);
+        this.marriage = new PlayerMarriage(this, partnerId);
         this.updateMaxHealth();
-        this.#logger.debug(`Player entity initialized for ${this.name} (ID: ${this.id}).`);
     }
 
     /**
      * Moves the player to a destination and handles potential ambushes.
      *
-     * @param destinationId Destination location identifier.
-     * @param distance Travel distance.
-     * @param danger Travel danger level.
-     * @returns The result of the exploration.
+     * @param destinationId The destination location identifier.
+     * @param distance The travel distance.
+     * @param danger The travel danger level.
+     * @returns A promise that resolves to the exploration result.
      * @throws PlayerAlreadyTravellingError If the player is already travelling.
      * @throws MoveInCombatError If the player is currently in combat.
      */
     public async moveTo(destinationId: string, distance = 1, danger = 1): Promise<ExplorationResult> {
-        if (this.isTravelling) {
-            throw new PlayerAlreadyTravellingError();
-        }
-
-        if (this.inCombat) {
-            throw new MoveInCombatError();
-        }
-
+        this.validateTravelState();
         this.isTravelling = true;
-        this.#logger.debug(`${this.name} travelling to ${destinationId} (distance: ${distance}, danger: ${danger}).`);
 
         try {
-            const randomTravelTime = Math.floor(Math.random() * 2001);
-            const baseTravelTime = randomTravelTime + PlayerEntity.BASE_TRAVEL_TIME_MS;
-            let travelTimeMs = baseTravelTime + distance * PlayerEntity.TRAVEL_DISTANCE_MULTIPLIER;
-            const ambushChance = Math.min(
-                PlayerEntity.BASE_AMBUSH_CHANCE + danger * PlayerEntity.DANGER_AMBUSH_MULTIPLIER,
-                PlayerEntity.MAX_AMBUSH_CHANCE
-            );
-            const willBeAmbushed = Math.random() < ambushChance;
+            const { travelDurationMs, willBeAmbushed } = this.calculateTravelParameters(distance, danger);
+
+            await new Promise<void>(resolve => setTimeout(resolve, travelDurationMs));
 
             if (willBeAmbushed) {
-                travelTimeMs = Math.floor(travelTimeMs / 2.1);
-            }
-
-            await new Promise<void>((resolve) => setTimeout(resolve, travelTimeMs));
-
-            if (willBeAmbushed) {
-                return this.handleAmbush(destinationId, travelTimeMs);
+                return this.handleAmbush(destinationId, travelDurationMs);
             }
 
             this.location = destinationId;
-            this.#logger.debug(`${this.name} arrived at ${destinationId} in ${travelTimeMs}ms.`);
+            consola.success(`Player ${this.name} arrived at ${destinationId}.`);
 
             return {
                 arrived: true,
                 attacked: false,
-                travelTimeMs,
+                travelDurationMs,
                 locationId: this.location
             };
         } finally {
@@ -167,118 +160,79 @@ export default class PlayerEntity {
     /**
      * Adds experience to the player and processes level-ups.
      *
-     * @param amount Experience amount to add.
+     * @param amount The experience amount to add.
      * @returns The experience gain result.
      */
     public addXP(amount: number): GainExperienceResult {
         if (amount <= 0) {
+            consola.warn(`Player ${this.name} received invalid or zero experience amount: ${amount}.`);
             return {
-                amount: 0,
-                total: this.experience.current,
-                leveledUp: false,
-                level: this.level
+                gainedAmount: 0,
+                totalExperience: this.experience.current,
+                isLeveledUp: false,
+                currentLevel: this.level
             };
         }
 
-        const previousExperience = this.experience.current;
-        const totalExperience = previousExperience + amount;
-
-        this.experience.current = totalExperience;
-
-        let leveledUp = false;
+        this.experience.current += amount;
+        let isLeveledUp = false;
 
         while (this.experience.current >= this.experience.required) {
             this.experience.current -= this.experience.required;
             this.levelUp();
-            leveledUp = true;
-        }
-
-        if (leveledUp) {
-            this.#logger.info(`${this.name} gained ${amount} XP (${previousExperience} → ${totalExperience}), Level ${this.level}.`);
-        } else {
-            this.#logger.info(`${this.name} gained ${amount} XP (${previousExperience} → ${totalExperience} / ${this.experience.required}).`);
+            isLeveledUp = true;
         }
 
         return {
-            amount,
-            total: this.experience.current,
-            leveledUp,
-            level: this.level
+            gainedAmount: amount,
+            totalExperience: this.experience.current,
+            isLeveledUp,
+            currentLevel: this.level
         };
     }
 
     /**
      * Applies damage to the player after calculating equipment and attribute defenses.
      *
-     * @param damage Raw incoming damage.
+     * @param damage The raw incoming damage amount.
      * @returns The damage result, or null if no damage can be applied.
      */
-    public takeDamage(damage: number): DamageResult | null {
+    public takeDamage(damage: number): (DamageResult & { death?: DeathResult }) | null {
         if (damage <= 0 || !this.isAlive()) {
             return null;
         }
 
-        let flatDefense = 0;
-        let percentDefense = 0;
         const items = this.inventory.getItems();
-
-        for (const item of items.filter((item) => item.isEquipped)) {
-            if (!item.data) {
-                continue;
-            }
-
-            const defenseBonus = item.data.defenseBonus ?? item.data.defense;
-
-            if (typeof defenseBonus === "number") {
-                flatDefense += defenseBonus;
-            }
-
-            if (typeof item.data.armorBonusPercent === "number") {
-                percentDefense += item.data.armorBonusPercent / 100;
-            }
-
-            if (typeof item.data.durability === "number" && item.data.durability > 0 && (typeof defenseBonus === "number" || typeof item.data.armorBonusPercent === "number")) {
-                const rarityMultipliers: Record<string, number> = {
-                    common: 1.5,
-                    uncommon: 1.2,
-                    rare: 1,
-                    epic: 0.7,
-                    legendary: 0.3
-                };
-
-                const multiplier = rarityMultipliers[item.rarity?.toLowerCase() ?? ""] ?? 1;
-                const durabilityLoss = Math.max(1, Math.floor(damage * 0.1 * multiplier));
-                const previousDurability = item.data.durability;
-
-                item.data.durability = Math.max(0, previousDurability - durabilityLoss);
-
-                this.#logger.debug(
-                    `${item.name} lost ${previousDurability - item.data.durability} durability (${previousDurability} → ${item.data.durability}).`
-                );
-
-                if (item.data.durability === 0) {
-                    this.#logger.debug(`${item.name} is completely broken!`);
-                }
-            }
-        }
-
+        const { flatDefense, percentDefense } = this.processEquipmentStats(items, damage);
+        
         const totalDefense = Math.max(0, Math.floor((this.attributes.defense + flatDefense) * (1 + percentDefense)));
-        const reducedDamage = Math.max(1, damage - Math.floor(totalDefense / 2));
+        const mitigationFactor = 100 / (100 + totalDefense * 2.5);
+        const reducedDamage = Math.max(1, Math.floor(damage * mitigationFactor));
 
         this.health.current = Math.max(0, this.health.current - reducedDamage);
+
+        let deathResult: DeathResult | null = null;
+        
+        // 🚨 VÉRIFICATION DE LA MORT (Sécurisé avec <= 0)
+        if (this.health.current <= 0) {
+            deathResult = handlePlayerDeath(this);
+        }
+
         this.inventory.save(items);
 
         return {
             reducedDamage,
             currentHealth: this.health.current,
-            rawDamage: damage
+            rawDamage: damage,
+            // On inclut les détails de la mort dans le retour si le joueur est mort
+            ...(deathResult ? { death: deathResult } : {})
         };
     }
 
     /**
      * Checks whether the player is alive.
      *
-     * @returns True if the player's current health is above zero.
+     * @returns True if the player's current health is above zero, false otherwise.
      */
     public isAlive(): boolean {
         return this.health.current > 0;
@@ -287,23 +241,25 @@ export default class PlayerEntity {
     /**
      * Allocates an attribute point to the specified attribute.
      *
-     * @param attribute Attribute to increase.
+     * @param attribute The attribute to increase.
+     * @returns void
      * @throws NoAttributePointsError If no attribute points are available.
      */
     public levelUpSkill(attribute: Attribute): void {
         if (this.attributes.points <= 0) {
+            consola.warn(`Player ${this.name} attempted to upgrade attribute without available points.`);
             throw new NoAttributePointsError();
         }
 
         this.attributes[attribute]++;
         this.attributes.points--;
-        this.#logger.info(`Player ${this.name} allocated a point to ${attribute} (New value: ${this.attributes[attribute]}).`);
+        consola.success(`Player ${this.name} upgraded attribute ${attribute}.`);
     }
 
     /**
      * Creates a serializable snapshot of the player.
      *
-     * @returns A player snapshot.
+     * @returns A player snapshot object.
      */
     public toJSON(): PlayerSnapshot {
         return {
@@ -321,30 +277,109 @@ export default class PlayerEntity {
 
     /**
      * Updates the player's maximum health based on level and equipment.
+     *
+     * @returns void
      */
     public updateMaxHealth(): void {
         const baseMaxHealth = PlayerEntity.BASE_HEALTH + this.level * PlayerEntity.HP_PER_LEVEL;
         const bonusHealth = this.inventory
             .getItems()
-            .filter((item) => item.isEquipped)
-            .reduce((total, item) => {
-                return total + (typeof item.data?.healthBonus === "number" ? item.data.healthBonus : 0);
-            }, 0);
+            .filter(item => item.isEquipped)
+            .reduce((total, item) => total + (typeof item.itemNbtData?.healthBonus === "number" ? item.itemNbtData.healthBonus : 0), 0);
 
         this.health.max = Math.max(1, baseMaxHealth + bonusHealth);
         this.health.current = Math.min(this.health.current, this.health.max);
     }
 
     /**
+     * Validates if the player can initiate movement.
+     */
+    private validateTravelState(): void {
+        if (this.isTravelling) {
+            consola.warn(`Player ${this.name} attempted to move while already travelling.`);
+            throw new PlayerAlreadyTravellingError();
+        }
+
+        if (this.inCombat) {
+            consola.warn(`Player ${this.name} attempted to move while in combat.`);
+            throw new MoveInCombatError();
+        }
+    }
+
+    /**
+     * Calculates travel time and ambush status.
+     */
+    private calculateTravelParameters(distance: number, danger: number): { travelDurationMs: number; willBeAmbushed: boolean } {
+        const randomTravelTime = Math.floor(Math.random() * 1500);
+        const baseTravelTime = randomTravelTime + PlayerEntity.BASE_TRAVEL_TIME_MS;
+        let travelDurationMs = baseTravelTime + distance * PlayerEntity.TRAVEL_DISTANCE_MULTIPLIER;
+        
+        const ambushChance = Math.min(
+            PlayerEntity.BASE_AMBUSH_CHANCE + danger * PlayerEntity.DANGER_AMBUSH_MULTIPLIER,
+            PlayerEntity.MAX_AMBUSH_CHANCE
+        );
+        const willBeAmbushed = Math.random() < ambushChance;
+
+        if (willBeAmbushed) {
+            travelDurationMs = Math.floor(travelDurationMs / 2);
+        }
+
+        return { travelDurationMs, willBeAmbushed };
+    }
+
+    /**
+     * Processes equipped item stats and durability changes.
+     */
+    private processEquipmentStats(items: any[], damage: number): { flatDefense: number; percentDefense: number } {
+        let flatDefense = 0;
+        let percentDefense = 0;
+
+        for (const item of items) {
+            if (!item.isEquipped || !item.data) {
+                continue;
+            }
+
+            const defenseBonus = item.data.defenseBonus ?? item.data.defense;
+            if (typeof defenseBonus === "number") {
+                flatDefense += defenseBonus;
+            }
+
+            if (typeof item.data.armorBonusPercent === "number") {
+                percentDefense += item.data.armorBonusPercent / 100;
+            }
+
+            this.processItemDurability(item, damage, defenseBonus);
+        }
+
+        return { flatDefense, percentDefense };
+    }
+
+    /**
+     * Updates an individual item's durability.
+     */
+    private processItemDurability(item: any, damage: number, defenseBonus: unknown): void {
+        const hasDurability = typeof item.data.durability === "number" && item.data.durability > 0;
+        const providesDefense = typeof defenseBonus === "number" || typeof item.data.armorBonusPercent === "number";
+
+        if (!hasDurability || !providesDefense) {
+            return;
+        }
+
+        const rarityKey = item.rarity?.toLowerCase() ?? "";
+        const multiplier = PlayerEntity.RARITY_MULTIPLIERS[rarityKey] ?? 1;
+        const durabilityLoss = Math.max(1, Math.floor(damage * 0.06 * multiplier));
+        
+        item.data.durability = Math.max(0, item.data.durability - durabilityLoss);
+    }
+
+    /**
      * Handles an ambush encountered during travel.
      *
-     * @param destinationId Destination location identifier.
-     * @param travelTimeMs Travel time before the ambush.
-     * @returns The exploration result containing the enemy.
+     * @param destinationId The destination location identifier.
+     * @param travelDurationMs The travel time before the ambush.
+     * @returns The exploration result containing the spawned enemy.
      */
-    private handleAmbush(destinationId: string, travelTimeMs: number): ExplorationResult {
-        this.#logger.info(`${this.name} was ambushed on the road to ${destinationId}.`);
-
+    private handleAmbush(destinationId: string, travelDurationMs: number): ExplorationResult {
         const isWaterArea = /water|sea|ocean|lake|river|lac|eau/i.test(destinationId);
         const enemyTypes = isWaterArea
             ? [EnemyType.Hydra, EnemyType.GiantRat]
@@ -352,25 +387,27 @@ export default class PlayerEntity {
 
         const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
         const enemyName = `${enemyType.charAt(0).toUpperCase()}${enemyType.slice(1)}`;
-        const baseHealth = 30 + this.level * 10;
+        
+        const baseHealth = 30 + this.level * 7;
+        const enemyGoldReward = Math.max(2, Math.floor(4 + this.level * 2.5));
 
         const enemy = new EnemyEntity(
             enemyType,
             enemyName,
             baseHealth,
             baseHealth,
-            5 + this.level * 2,
-            2 + this.level,
-            15 * this.level,
-            10 * this.gold
+            5 + this.level * 1.2,
+            1 + this.level * 0.7,
+            8 * this.level,
+            enemyGoldReward
         );
 
-        this.rpg.combat.startWithEnemy(this, enemy);
+        this.worldInstance.combat.startWithEnemy(this, enemy);
 
         return {
             arrived: false,
             attacked: true,
-            travelTimeMs,
+            travelDurationMs,
             locationId: this.location,
             enemy
         };
@@ -378,6 +415,8 @@ export default class PlayerEntity {
 
     /**
      * Increases the player's level and improves their attributes.
+     *
+     * @returns void
      */
     private levelUp(): void {
         this.level++;
@@ -389,7 +428,7 @@ export default class PlayerEntity {
         this.attributes.defense++;
         this.attributes.points++;
         this.experience.required = this.level * PlayerEntity.XP_PER_LEVEL;
-        this.#logger.info(`${this.name} reached level ${this.level}!`);
+        consola.success(`Player ${this.name} reached level ${this.level}.`);
     }
 
     /**
@@ -400,35 +439,17 @@ export default class PlayerEntity {
      */
     private generateBaseStats(): ClassStats {
         const stats: Record<PlayerClass, ClassStats> = {
-            [PlayerClass.Warrior]: {
-                strength: 10,
-                agility: 4,
-                intelligence: 3,
-                defense: 8
-            },
-            [PlayerClass.Explorer]: {
-                strength: 6,
-                agility: 7,
-                intelligence: 7,
-                defense: 5
-            },
-            [PlayerClass.Rogue]: {
-                strength: 5,
-                agility: 9,
-                intelligence: 5,
-                defense: 4
-            }
+            [PlayerClass.Warrior]: { strength: 10, agility: 4, intelligence: 3, defense: 8 },
+            [PlayerClass.Explorer]: { strength: 6, agility: 8, intelligence: 6, defense: 5 },
+            [PlayerClass.Rogue]: { strength: 5, agility: 10, intelligence: 4, defense: 4 }
         };
 
         const baseStats = stats[this.classId];
-
         if (!baseStats) {
             throw new UnknownPlayerClassError(this.classId);
         }
 
-        const randomize = (value: number): number => {
-            return Math.max(1, Math.round(value * (0.8 + Math.random() * 0.4)));
-        };
+        const randomize = (value: number): number => Math.max(1, Math.round(value * (0.9 + Math.random() * 0.2)));
 
         return {
             strength: randomize(baseStats.strength),

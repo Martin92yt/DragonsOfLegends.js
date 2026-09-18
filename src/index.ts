@@ -12,7 +12,7 @@ export { EnemyType } from "./enemy/enemy.type.js";
 export { default as CombatManager } from "./combat/combat.manager.js";
 export { default as Combat } from "./combat/combat.js";
 
-export { EquipmentSlot, ItemCategory, ItemRarity } from "./inventory/item.enum.js";
+export { type EquipmentSlot, ItemCategory, ItemRarity } from "./inventory/item.enum.js";
 export { InventoryEntity } from "./inventory/inventory.class.js";
 
 export { default as LocationManager } from "./location/location.class.js";

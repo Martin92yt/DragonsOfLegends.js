@@ -1,274 +1,298 @@
 import { CreatePlayerOptions, PlayerCount, PlayerData } from "./player.interface.js";
 import PlayerDatabase from "./player.database.js";
 import Player from "./player.entity.js";
-import { Logger } from "../utils/logger.js";
+import { consola } from "consola";
 import World from "../world.js";
 import { PlayerAlreadyExistsError } from "../types/error.js";
 import { InventoryEntity } from "../inventory/inventory.class.js";
 
 export default class PlayerManager {
-    private static readonly INACTIVITY_TIME = 15 * 60 * 1000;
-    readonly #logger = new Logger({ context: "PlayerManager" });
-    private readonly rpg: World;
-    private readonly players = new Map<string, Player>();
-    private readonly unloadTimers = new Map<string, NodeJS.Timeout>();
-    private readonly database = new PlayerDatabase();
+    private static readonly INACTIVITY_TIME_MS = 15 * 60 * 1000;
+    public readonly world: World;
+    private readonly activePlayersMap = new Map<string, Player>();
+    private readonly unloadTimersMap = new Map<string, NodeJS.Timeout>();
+    private readonly playerDatabase = new PlayerDatabase(this);
 
     /**
      * Creates a player manager.
      *
-     * @param rpg World instance.
+     * @param worldInstance The world instance associated with the player manager.
+     * @returns void
      */
-    public constructor(rpg: World) {
-        this.rpg = rpg;
+    public constructor(worldInstance: World) {
+        this.world = worldInstance;
     }
 
     /**
      * Ensures that a player exists in memory.
      *
-     * @param idOrOptions Player identifier or player creation options.
-     * @returns The existing player, the loaded player, or a newly created player.
+     * @param playerIdOrCreationOptions The player identifier or player creation options.
+     * @returns The existing player, the loaded player, or a newly created player, or undefined if not found/created.
      */
-    public ensure(idOrOptions: string | CreatePlayerOptions): Player | undefined {
-        if (typeof idOrOptions === "string") {
-            return this.get(idOrOptions);
+    public ensure(playerIdOrCreationOptions: string | CreatePlayerOptions): Player | undefined {
+        if (typeof playerIdOrCreationOptions === "string") {
+            return this.get(playerIdOrCreationOptions);
         }
 
-        return this.get(idOrOptions.id) ?? this.create(idOrOptions);
+        return this.get(playerIdOrCreationOptions.id) ?? this.create(playerIdOrCreationOptions);
     }
 
     /**
      * Gets a player by identifier.
      *
-     * @param id Player identifier.
+     * @param playerId The player identifier.
      * @returns The player if found, otherwise undefined.
      */
-    public get(id: string): Player | undefined {
-        const activePlayer = this.players.get(id);
+    public get(playerId: string): Player | undefined {
+        const activePlayer = this.activePlayersMap.get(playerId);
 
         if (activePlayer) {
-            this.refreshUnloadTimer(id);
+            this.refreshUnloadTimer(playerId);
             return activePlayer;
         }
 
-        const data = this.database.get(id);
-
-        if (!data) {
+        const playerData = this.playerDatabase.get(playerId);
+        if (!playerData) {
             return undefined;
         }
 
-        const player = new Player(
-            this.rpg,
-            data.id,
-            data.name,
-            data.classId,
-            data.locationId,
-            data.level,
-            data.experience,
-            data.health,
-            data.maxHealth,
-            data.partener,
-            data.strength,
-            data.agility,
-            data.intelligence,
-            data.defense,
-            data.attributePoints,
-            data.gold
+        return this.loadPlayerIntoCache(playerData);
+    }
+
+    /**
+     * Instantiates a player from database data, loads their inventory, and caches them.
+     *
+     * @param playerData The raw player data from the database.
+     * @returns The newly loaded player instance.
+     */
+    private loadPlayerIntoCache(playerData: PlayerData): Player {
+        const playerInstance = new Player(
+            this.world,
+            playerData.id,
+            playerData.name,
+            playerData.classId,
+            playerData.locationId,
+            playerData.level,
+            playerData.experience,
+            playerData.health,
+            playerData.maxHealth,
+            playerData.partnerId,
+            playerData.strength,
+            playerData.agility,
+            playerData.intelligence,
+            playerData.defense,
+            playerData.attributePoints,
+            playerData.gold
         );
 
-        player.inventory.load();
-        this.players.set(id, player);
-        this.refreshUnloadTimer(id);
-        this.#logger.debug(`Player ${id} loaded into cache.`);
+        playerInstance.inventory.load();
+        this.activePlayersMap.set(playerData.id, playerInstance);
+        this.refreshUnloadTimer(playerData.id);
+        consola.debug(`Player ${playerData.id} loaded into cache.`);
 
-        return player;
+        return playerInstance;
     }
 
     /**
      * Creates and persists a new player.
      *
-     * @param options Player creation options.
+     * @param creationOptions The player creation options.
      * @returns The newly created player.
      * @throws PlayerAlreadyExistsError If the player already exists.
      */
-    public create(options: CreatePlayerOptions): Player {
-        const { id, name, playerClass } = options;
+    public create(creationOptions: CreatePlayerOptions): Player {
+        const { id: playerId, name: playerName, playerClass } = creationOptions;
 
-        if (this.exist(id)) {
-            throw new PlayerAlreadyExistsError(id);
+        if (this.exist(playerId)) {
+            consola.warn(`Attempt to create already existing player ${playerId}.`);
+            throw new PlayerAlreadyExistsError(playerId);
         }
 
-        const player = new Player(
-            this.rpg,
-            id,
-            name,
+        const newPlayerInstance = new Player(
+            this.world,
+            playerId,
+            playerName,
             playerClass,
-            this.rpg.location.getStartingCityId(),
+            this.world.location.getStartingCityId(),
             1,
             0,
             100,
             100,
-            ""
+            "",
+            this.world.initializationOptions.starterGold || 0
         );
 
-        this.players.set(id, player);
-        this.save(player);
-        this.refreshUnloadTimer(id);
-        this.#logger.info(`New player registered: ${name} (${id}) as class ${playerClass}.`);
+        this.activePlayersMap.set(playerId, newPlayerInstance);
+        // TODO: Starter Items
+        this.save(newPlayerInstance);
+        this.refreshUnloadTimer(playerId);
+        consola.success(`Player ${playerId} created.`);
 
-        return player;
+        return newPlayerInstance;
     }
 
     /**
      * Checks whether a player exists.
      *
-     * @param id Player identifier.
-     * @returns True if the player exists.
+     * @param playerId The player identifier.
+     * @returns True if the player exists, false otherwise.
      */
-    public exist(id: string): boolean {
-        return this.players.has(id) || this.database.get(id) !== undefined;
+    public exist(playerId: string): boolean {
+        return this.activePlayersMap.has(playerId) || this.playerDatabase.get(playerId) !== undefined;
     }
 
     /**
      * Deletes a player from memory, inventory, and database.
      *
-     * @param id Player identifier.
-     * @returns True if the player was deleted from the database.
+     * @param playerId The player identifier.
+     * @returns True if the player was deleted from the database, false otherwise.
      */
-    public delete(id: string): boolean {
-        this.clearUnloadTimer(id);
-        this.players.delete(id);
-        new InventoryEntity(id).clear();
+    public delete(playerId: string): boolean {
+        this.clearUnloadTimer(playerId);
+        this.activePlayersMap.delete(playerId); 
+        let player = this.get(playerId);
+        if (!player) {
+            consola.warn(`Failed to delete non-existent player ${playerId} from database.`);
+            return false;
+        };
+        new InventoryEntity(playerId, player).clear();
 
-        const deleted = this.database.delete(id);
+        const isDeleted = this.playerDatabase.delete(playerId);
 
-        if (deleted) {
-            this.#logger.info(`Player ${id} permanently deleted.`);
+        if (isDeleted) {
+            consola.info(`Player ${playerId} deleted.`);
+        } else {
+            consola.warn(`Failed to delete non-existent player ${playerId} from database.`);
         }
 
-        return deleted;
+        return isDeleted;
     }
 
     /**
      * Returns the current player count.
      *
-     * @returns Active and total player counts.
+     * @returns The active and total player counts.
      */
     public count(): PlayerCount {
         return {
-            active: this.players.size,
-            total: this.database.count()
+            active: this.activePlayersMap.size,
+            total: this.playerDatabase.count()
         };
     }
 
     /**
      * Removes a player from the active cache after saving it.
      *
-     * @param id Player identifier.
+     * @param playerId The player identifier.
+     * @returns void
      */
-    public remove(id: string): void {
-        const player = this.players.get(id);
+    public remove(playerId: string): void {
+        const playerInstance = this.activePlayersMap.get(playerId);
 
-        if (!player) {
-            this.clearUnloadTimer(id);
+        if (!playerInstance) {
+            consola.warn(`Attempt to remove non-cached player ${playerId}.`);
+            this.clearUnloadTimer(playerId);
             return;
         }
 
-        this.save(player);
-        this.clearUnloadTimer(id);
-        this.players.delete(id);
+        this.save(playerInstance);
+        this.clearUnloadTimer(playerId);
+        this.activePlayersMap.delete(playerId);
     }
 
     /**
      * Refreshes the inactivity timer for a player.
      *
-     * @param id Player identifier.
+     * @param playerId The player identifier.
+     * @returns void
      */
-    private refreshUnloadTimer(id: string): void {
-        this.clearUnloadTimer(id);
+    private refreshUnloadTimer(playerId: string): void {
+        this.clearUnloadTimer(playerId);
 
-        const timer = setTimeout(() => this.remove(id), PlayerManager.INACTIVITY_TIME);
+        const inactivityTimer = setTimeout(() => this.remove(playerId), PlayerManager.INACTIVITY_TIME_MS);
 
-        timer.unref();
-        this.unloadTimers.set(id, timer);
+        inactivityTimer.unref();
+        this.unloadTimersMap.set(playerId, inactivityTimer);
     }
 
     /**
      * Clears a player's inactivity timer.
      *
-     * @param id Player identifier.
+     * @param playerId The player identifier.
+     * @returns void
      */
-    private clearUnloadTimer(id: string): void {
-        const timer = this.unloadTimers.get(id);
+    private clearUnloadTimer(playerId: string): void {
+        const inactivityTimer = this.unloadTimersMap.get(playerId);
 
-        if (!timer) {
+        if (!inactivityTimer) {
             return;
         }
 
-        clearTimeout(timer);
-        this.unloadTimers.delete(id);
+        clearTimeout(inactivityTimer);
+        this.unloadTimersMap.delete(playerId);
     }
 
     /**
      * Saves a player to the database.
      *
-     * @param player Player to save.
+     * @param playerInstance The player to save.
+     * @returns void
      */
-    private save(player: Player): void {
-        const data: PlayerData = {
-            id: player.id,
-            name: player.name,
-            classId: player.classId,
-            locationId: player.location,
-            level: player.level,
-            experience: player.experience.current,
-            health: player.health.current,
-            maxHealth: player.health.max,
-            partener: player.marriage?.getPartnerId() ?? "",
-            strength: player.attributes.strength,
-            agility: player.attributes.agility,
-            intelligence: player.attributes.intelligence,
-            defense: player.attributes.defense,
-            attributePoints: player.attributes.points,
-            gold: player.gold,
-            bankGold: player.bankGold,
-            bankUnlocked: player.bankUnlocked
+    private save(playerInstance: Player): void {
+        const playerData: PlayerData = {
+            id: playerInstance.id,
+            name: playerInstance.name,
+            classId: playerInstance.classId,
+            locationId: playerInstance.location,
+            level: playerInstance.level,
+            experience: playerInstance.experience.current,
+            health: playerInstance.health.current,
+            maxHealth: playerInstance.health.max,
+            partnerId: playerInstance.marriage?.getPartnerId() ?? "",
+            strength: playerInstance.attributes.strength,
+            agility: playerInstance.attributes.agility,
+            intelligence: playerInstance.attributes.intelligence,
+            defense: playerInstance.attributes.defense,
+            attributePoints: playerInstance.attributes.points,
+            gold: playerInstance.gold,
+            bankGold: playerInstance.bankGold,
+            bankUnlocked: playerInstance.bankUnlocked
         };
 
-        this.database.save(data);
+        this.playerDatabase.save(playerData);
     }
 
     /**
      * Checks whether a player exists.
      *
-     * @param id Player identifier.
-     * @returns True if the player exists.
+     * @param playerId The player identifier.
+     * @returns True if the player exists, false otherwise.
      */
-    public has(id: string): boolean {
-        return this.exist(id);
+    public has(playerId: string): boolean {
+        return this.exist(playerId);
     }
 
     /**
      * Returns the number of active players.
      *
-     * @returns Number of active players.
+     * @returns The number of active players.
      */
     public get size(): number {
-        return this.players.size;
+        return this.activePlayersMap.size;
     }
 
     /**
      * Saves all active players and their inventories.
+     *
+     * @returns void
      */
     public saveAll(): void {
-        this.#logger.info(`Saving ${this.players.size} active player(s)...`);
-
-        for (const [id, player] of this.players) {
-            this.save(player);
-            player.inventory.save();
-            this.clearUnloadTimer(id);
+        for (const [playerId, playerInstance] of this.activePlayersMap) {
+            this.save(playerInstance);
+            playerInstance.inventory.save();
+            this.clearUnloadTimer(playerId);
         }
 
-        this.#logger.info("All active players and their inventories have been saved successfully.");
+        consola.success("All players saved.");
     }
 }

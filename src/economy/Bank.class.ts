@@ -1,148 +1,185 @@
 import PlayerEntity from "../player/player.entity.js";
 import { BankLockedError, InsufficientFundsError, InvalidAmountError } from "../types/error.js";
 import { BankResult } from "../types/result.js";
-import { Logger } from "../utils/logger.js";
+import { consola } from "consola";
 import World from "../world.js";
 
 export default class BankClass {
-    readonly #logger = new Logger({ context: "BankClass" });
+    public readonly worldInstance: World;
 
-    public readonly rpg: World;
-    public constructor(rpg: World) { 
-        this.rpg = rpg;
+    /**
+     * Creates a new BankClass instance.
+     *
+     * @param worldInstance The world instance containing game state and players.
+     * @returns void
+     */
+    public constructor(worldInstance: World) {
+        this.worldInstance = worldInstance;
     }
 
-    private getPlayerById(identifier: string): PlayerEntity | undefined {
-        return this.rpg.players.get(identifier); 
+    /**
+     * Retrieves a player entity by their identifier.
+     */
+    private getPlayerById(playerIdentifier: string): PlayerEntity | undefined {
+        const foundPlayerEntity = this.worldInstance.players.get(playerIdentifier);
+        if (!foundPlayerEntity) {
+            consola.warn(`Failed to find player with identifier ${playerIdentifier} in bank system.`);
+        }
+        return foundPlayerEntity;
+    }
+
+    /**
+     * Validates that the player's bank is unlocked and the amount is positive.
+     */
+    private validateTransaction(playerEntity: PlayerEntity, transactionAmount: number, actionName: string): void {
+        if (!playerEntity.bankUnlocked) {
+            consola.warn(`${actionName} failed: bank is locked for player ${playerEntity.name}.`);
+            throw new BankLockedError();
+        }
+
+        if (transactionAmount <= 0) {
+            consola.warn(`${actionName} failed for ${playerEntity.name}: invalid amount ${transactionAmount}.`);
+            throw new InvalidAmountError(`${actionName} amount must be greater than 0.`);
+        }
+    }
+
+    /**
+     * Retrieves the partner of a player if they are married and the partner's bank is unlocked.
+     */
+    private getValidPartner(playerEntity: PlayerEntity): PlayerEntity | undefined {
+        if (!playerEntity.marriage?.isMarried()) {
+            return undefined;
+        }
+
+        const partnerIdentifier = playerEntity.marriage.getPartnerId();
+        if (!partnerIdentifier) {
+            return undefined;
+        }
+
+        const partnerPlayerEntity = this.getPlayerById(partnerIdentifier);
+        return partnerPlayerEntity && partnerPlayerEntity.bankUnlocked ? partnerPlayerEntity : undefined;
     }
 
     /**
      * Gets the total bank balance of the couple (or individual if not married).
      */
-    public getBalanceTotal(player: PlayerEntity): number {
-        let total = player.bankGold;
-
-        if (player.marriage?.isMarried()) {
-            const partnerId = player.marriage.getPartnerId();
-            if (partnerId) {
-                const partner = this.getPlayerById(partnerId);
-                if (partner && partner.bankUnlocked) {
-                    total += partner.bankGold;
-                }
-            }
+    public getBalanceTotal(playerEntity: PlayerEntity): number {
+        let totalCombinedBankGold = playerEntity.bankGold;
+        const validPartnerEntity = this.getValidPartner(playerEntity);
+        
+        if (validPartnerEntity) {
+            totalCombinedBankGold += validPartnerEntity.bankGold;
         }
-        return total;
+
+        return totalCombinedBankGold;
     }
 
     /**
      * Deposits money from wallet to bank.
      */
-    public deposit(player: PlayerEntity, amount: number): BankResult {
-        if (!player.bankUnlocked) {
-            this.#logger.warn(`Attempt to deposit on a locked account by ${player.name}.`);
-            throw new BankLockedError();
-        }
+    public deposit(playerEntity: PlayerEntity, depositAmount: number): BankResult {
+        this.validateTransaction(playerEntity, depositAmount, "Deposit");
 
-        if (amount <= 0) {
-            throw new InvalidAmountError("Deposit amount must be greater than 0.");
-        }
-
-        if (player.gold < amount) {
+        if (playerEntity.gold < depositAmount) {
+            consola.warn(`Deposit failed for ${playerEntity.name}: insufficient wallet funds (${playerEntity.gold}/${depositAmount}).`);
             throw new InsufficientFundsError("Not enough gold in wallet.");
         }
 
-        const balanceBefore = player.bankGold;
-        player.gold -= amount;
-        player.bankGold += amount;
-        const balanceAfter = player.bankGold;
+        const maxGoldLimit = this.worldInstance.initializationOptions.bankMaxGoldLimit ?? 500000;
+        
+        // Si le joueur est marié, on multiplie la limite par 2 (suppose qu'il y a une propriété isMarried ou partenaire sur playerEntity)
+        const effectiveLimit = playerEntity.marriage.isMarried() ? maxGoldLimit * 2 : maxGoldLimit;
 
-        this.#logger.info(`${player.name} deposited ${amount} gold to bank (Personal Account: ${balanceBefore} -> ${balanceAfter}). Total couple balance: ${this.getBalanceTotal(player)}`);
+        // Si la limite n'est pas illimitée (-1) et que le nouveau montant dépasse la limite autorisée
+        if (effectiveLimit !== -1 && (playerEntity.bankGold + depositAmount) > effectiveLimit) {
+            consola.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);
+            throw new Error(`Bank gold limit reached (Maximum allowed: ${effectiveLimit}).`);
+        }
 
-        return { solde: this.getBalanceTotal(player), success: true };
+        playerEntity.gold -= depositAmount;
+        playerEntity.bankGold += depositAmount;
+
+        consola.success(`${playerEntity.name} deposited ${depositAmount} gold.`);
+
+        return { balance: this.getBalanceTotal(playerEntity), success: true };
     }
-    
+
     /**
      * Withdraws money from bank to wallet.
      */
-    public withdraw(player: PlayerEntity, amount: number): BankResult {
-        if (!player.bankUnlocked) {
-            this.#logger.warn(`Attempt to withdraw from a locked account by ${player.name}.`);
-            throw new BankLockedError();
-        }
+    public withdraw(playerEntity: PlayerEntity, withdrawalAmount: number): BankResult {
+        this.validateTransaction(playerEntity, withdrawalAmount, "Withdrawal");
 
-        if (amount <= 0) {
-            throw new InvalidAmountError("Withdrawal amount must be greater than 0.");
-        }
-
-        const totalBankBefore = this.getBalanceTotal(player);
-
-        if (totalBankBefore < amount) {
+        const totalBankBeforeWithdrawal = this.getBalanceTotal(playerEntity);
+        if (totalBankBeforeWithdrawal < withdrawalAmount) {
+            consola.warn(`Withdrawal failed for ${playerEntity.name}: insufficient bank funds (${totalBankBeforeWithdrawal}/${withdrawalAmount}).`);
             throw new InsufficientFundsError("Not enough gold in the bank.");
         }
 
-        // Withdraw from player's account first, then from partner's account if needed
-        let remainingToWithdraw = amount;
-        const playerBankBefore = player.bankGold;
-        let partnerBankBefore = 0;
-        let partnerBankAfter = 0;
-        let partner: PlayerEntity | undefined;
+        let remainingAmountToWithdraw = withdrawalAmount;
 
-        if (player.bankGold >= remainingToWithdraw) {
-            player.bankGold -= remainingToWithdraw;
+        if (playerEntity.bankGold >= remainingAmountToWithdraw) {
+            playerEntity.bankGold -= remainingAmountToWithdraw;
         } else {
-            remainingToWithdraw -= player.bankGold;
-            player.bankGold = 0;
+            remainingAmountToWithdraw -= playerEntity.bankGold;
+            playerEntity.bankGold = 0;
 
-            if (player.marriage?.isMarried()) {
-                const partnerId = player.marriage.getPartnerId();
-                if (partnerId) {
-                    partner = this.getPlayerById(partnerId);
-                    if (partner) {
-                        partnerBankBefore = partner.bankGold;
-                        partner.bankGold -= remainingToWithdraw;
-                        partnerBankAfter = partner.bankGold;
-                    }
-                }
+            const validPartnerEntity = this.getValidPartner(playerEntity);
+            if (validPartnerEntity) {
+                validPartnerEntity.bankGold -= remainingAmountToWithdraw;
             }
         }
 
-        const playerBankAfter = player.bankGold;
-        player.gold += amount;
-        const totalBankAfter = this.getBalanceTotal(player);
+        playerEntity.gold += withdrawalAmount;
+        const totalBankAfterWithdrawal = this.getBalanceTotal(playerEntity);
 
-        // Detailed transaction log
-        if (partner && partnerBankBefore !== partnerBankAfter) {
-            this.#logger.info(`${player.name} withdrew ${amount} gold. Personal Bank: (${playerBankBefore} -> ${playerBankAfter}), Partner (${partner.name}) Bank: (${partnerBankBefore} -> ${partnerBankAfter}). Total Bank: ${totalBankBefore} -> ${totalBankAfter}`);
-        } else {
-            this.#logger.info(`${player.name} withdrew ${amount} gold. Personal Bank: (${playerBankBefore} -> ${playerBankAfter}). Total Bank: ${totalBankBefore} -> ${totalBankAfter}`);
-        }
+        consola.success(`${playerEntity.name} withdrew ${withdrawalAmount} gold.`);
 
-        return { solde: totalBankAfter, success: true };
+        return { balance: totalBankAfterWithdrawal, success: true };
     }
 
     /**
      * Gets the total bank balance.
      */
-    public solde(player: PlayerEntity): BankResult {
-        if (!player.bankUnlocked) {
+    public solde(playerEntity: PlayerEntity): BankResult {
+        if (!playerEntity.bankUnlocked) {
+            consola.warn(`Balance check failed: bank is locked for player ${playerEntity.name}.`);
             throw new BankLockedError();
         }
 
-        return { solde: this.getBalanceTotal(player), success: true };
+        return { balance: this.getBalanceTotal(playerEntity), success: true };
     }
 
     /**
      * Unlocks the player's bank account.
      */
-    public unlock(player: PlayerEntity): boolean {
-        if (player.bankUnlocked) return false;
+    public unlock(playerEntity: PlayerEntity): boolean {
+        if (playerEntity.bankUnlocked) {
+            consola.warn(`Bank unlock skipped: account is already unlocked for ${playerEntity.name}.`);
+            return false;
+        }
 
-        player.bankUnlocked = true;
-        this.#logger.info(`Bank account of ${player.name} has been unlocked.`);
+        const unlockCost = this.worldInstance.initializationOptions.bankUnlockCost ?? 0;
+
+        if (unlockCost > 0) {
+            if (playerEntity.gold < unlockCost) {
+                consola.warn(`Failed to unlock bank for ${playerEntity.name}: insufficient gold (requires ${unlockCost}, has ${playerEntity.gold}).`);
+                return false;
+            }
+
+            playerEntity.gold -= unlockCost;
+            consola.success(`${playerEntity.name} paid ${unlockCost} gold to unlock their bank account.`);
+        }
+
+        playerEntity.bankUnlocked = true;
+        consola.success(`Bank account unlocked for ${playerEntity.name}.`);
         return true;
     }
 
+    /**
+     * Closes the banking system and logs a success message.
+     */
     public close(): void {
-        this.#logger.info("Closing the banking system.");
+        consola.success("Banking system closed.");
     }
 }
