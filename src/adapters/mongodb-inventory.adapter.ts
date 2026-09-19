@@ -31,9 +31,9 @@ export default class MongoInventoryAdapter {
     private static readonly VALID_RARITIES = new Set<string>(Object.values(ItemRarity));
     private static readonly VALID_SLOTS = new Set<string>(VALID_EQUIPMENT_SLOTS);
 
-    public constructor(inventory: InventoryEntity, customUri?: string) {
-        const uri = customUri || inventory.playerEntityReference.worldInstance.initializationOptions.database?.uri || "mongodb://localhost:27017";
-        const dbName = inventory.playerEntityReference.worldInstance.initializationOptions.database?.name || "dragons_of_legends";
+    public constructor(inventory: InventoryEntity) {
+        const uri = inventory.playerEntityReference.worldInstance.initializationOptions.database?.uri || "mongodb://localhost:27017";
+        const dbName = inventory.playerEntityReference.worldInstance.initializationOptions.database?.name || "dragons-of-legends";
 
         this.client = new MongoClient(uri);
         this.initPromise = this.initConnection(dbName); // 🛡️ On stocke la promesse

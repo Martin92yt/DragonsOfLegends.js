@@ -50,11 +50,11 @@ export default class World {
      * @param initializationOptions Configuration settings for the world initialization.
      * @returns void
      */
-    public constructor(
-        initializationOptions: WorldInitializationOptions = {
+    public constructor(initializationOptions: WorldInitializationOptions = {}) {
+        // Fusion propre des options par défaut et personnalisées
+        this.initializationOptions = {
             premadeMap: true,
             checkUpdates: true,
-            database: { adapter: "file", path: "./data.db" },
             deathMode: "cooldown",
             deathCooldown: "1m",
             deathPenaltyRate: 5,
@@ -62,29 +62,46 @@ export default class World {
             starterItems: { health_potion: 3, rusty_sword: 1 },
             bankUnlockCost: 1000,
             bankMaxGoldLimit: 500000,
+            ...initializationOptions,
+            database: {
+                adapter: "file",
+                path: "./data.db",
+                ...initializationOptions.database
+            },
             regen: {
                 enabled: true,
-                rate: 5, // 5 PV récupérés par tour ou par action
-                cooldown: 10, // ou toutes les X secondes
+                rate: 5,
+                cooldown: 10,
+                ...initializationOptions.regen
             }
-        }
-    ) {
-        this.initializationOptions = initializationOptions;
+        };
+
+        // Initialisation des managers et des systèmes du monde
         this.location = new LocationClass();
         this.bank = new BankClass(this);
-        this.combat = new CombatManager()
+        this.combat = new CombatManager();
         this.players = new PlayerManager(this);
+        
         this.initializeWorld(this.initializationOptions);
+        this.setupRegeneration();
+    }
 
-        // Gestion automatique de la régénération si activée dans les options
-        if (this.initializationOptions.regen?.enabled) {
-            const regenRate = this.initializationOptions.regen.rate;
-            const regenCooldownMs = (this.initializationOptions.regen.cooldown || 10) * 1000;
+    /**
+     * Configure le timer automatique de régénération des joueurs si activé.
+     */
+    private setupRegeneration(): void {
+        const regenConfig = this.initializationOptions.regen;
+        if (!regenConfig?.enabled) return;
 
-            setInterval(() => {
-                this.players.tickRegen(regenRate);
-            }, regenCooldownMs);
-        }
+        const regenRate = regenConfig.rate;
+        const regenCooldownMs = (regenConfig.cooldown || 10) * 1000;
+
+        const regenInterval = setInterval(() => {
+            this.players.tickRegen(regenRate);
+        }, regenCooldownMs);
+
+        // Empêche l'intervalle de bloquer la fermeture du processus Node.js si besoin
+        regenInterval.unref?.();
     }
 
     /**
@@ -149,7 +166,7 @@ export default class World {
      */
     private compareVersions(targetPackageName: string, installedVersion: string, registryVersion: string): void {
         if (registryVersion !== installedVersion) {
-            consola.warn(`A new version of ${targetPackageName} is available: ${registryVersion}`);
+            consola.warn(`A new version of ${targetPackageName} is available: ${registryVersion} (currently installed: ${installedVersion})`);
         } else {
             consola.info("Package is up to date.");
         }

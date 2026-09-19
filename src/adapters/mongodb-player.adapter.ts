@@ -15,9 +15,9 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
     private playersCollection!: Collection<PlayerData>;
     private isConnected: boolean = false;
 
-    public constructor(players: PlayerManager, customUri?: string) {
-        const uri = customUri || players.world.initializationOptions.database?.uri || "mongodb://localhost:27017";
-        const dbName = players.world.initializationOptions.database?.name || "dragons_of_legends";
+    public constructor(players: PlayerManager) {
+        const uri = players.world.initializationOptions.database?.uri || "mongodb://localhost:27017";
+        const dbName = players.world.initializationOptions.database?.name || "dragons-of-legends";
 
         this.client = new MongoClient(uri);
         this.initConnection(dbName);

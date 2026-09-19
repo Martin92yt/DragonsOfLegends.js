@@ -13,10 +13,11 @@ export default class PlayerManager {
     private readonly unloadTimersMap = new Map<string, NodeJS.Timeout>();
     private readonly playerDatabase;
 
-    public constructor(worldInstance: World) {
+    constructor(worldInstance: World) {
         this.world = worldInstance;
         this.playerDatabase = new PlayerDatabase(this);
     }
+
 
     /**
      * Ensures that a player exists in memory.
