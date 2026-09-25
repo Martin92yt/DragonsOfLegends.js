@@ -4,7 +4,7 @@ import { consola } from "consola";
 import Combat from "./combat.js";
 import { CombatResult } from "../types/result.js";
 import { PlayerAlreadyInCombatError, PlayerNotInCombatError } from "../types/error.js";
-import EnemyEntity from "../enemy/enemy.class.js";
+import EnemyEntity from "../enemy/enemy.js";
 
 export default class CombatManager {
     private readonly activeCombatMap = new Map<string, Combat>();

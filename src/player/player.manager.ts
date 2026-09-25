@@ -4,7 +4,7 @@ import Player from "./player.entity.js";
 import { consola } from "consola";
 import World from "../world.js";
 import { PlayerAlreadyExistsError } from "../types/error.js";
-import { InventoryEntity } from "../inventory/inventory.class.js";
+import { InventoryEntity } from "../inventory/inventory.js";
 
 export default class PlayerManager {
     private static readonly INACTIVITY_TIME_MS = 15 * 60 * 1000;

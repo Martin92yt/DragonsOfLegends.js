@@ -1,4 +1,4 @@
-import EnemyEntity from "../enemy/enemy.class.js";
+import EnemyEntity from "../enemy/enemy.js";
 
 /**
  * Represents the outcome of a combat turn or encounter.

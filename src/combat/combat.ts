@@ -1,5 +1,5 @@
 import PlayerEntity from "../player/player.entity.js";
-import EnemyEntity from "../enemy/enemy.class.js";
+import EnemyEntity from "../enemy/enemy.js";
 import { consola } from "consola";
 import { CombatResult } from "../types/result.js";
 import { ItemNBT, InventoryItemRecord } from "../inventory/inventory.interface.js";

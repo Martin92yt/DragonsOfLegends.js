@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { MongoClient, Collection, Db } from "mongodb";
-import { InventoryEntity } from "../inventory/inventory.class.js";
+import { InventoryEntity } from "../inventory/inventory.js";
 import { EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
 import { EquipmentSlot, ItemCategory, ItemRarity, VALID_EQUIPMENT_SLOTS } from "../inventory/item.enum.js";
 

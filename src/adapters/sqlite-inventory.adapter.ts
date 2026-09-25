@@ -10,7 +10,7 @@ import { consola } from "consola";
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
-import { InventoryEntity } from "../inventory/inventory.class.js";
+import { InventoryEntity } from "../inventory/inventory.js";
 import { PlayerData } from "../player/player.interface.js";
 import { EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
 

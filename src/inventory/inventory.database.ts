@@ -1,5 +1,5 @@
 import { EquipmentRecord, InventoryItemRecord } from "./inventory.interface.js";
-import { InventoryEntity } from "./inventory.class.js";
+import { InventoryEntity } from "./inventory.js";
 import SqliteInventoryAdapter from "../adapters/sqlite-inventory.adapter.js"; // Ajuste le chemin selon ton arborescence
 import MongoInventoryAdapter from "../adapters/mongodb-inventory.adapter.js";   // Ajuste le chemin selon ton arborescence
 

@@ -1,9 +1,10 @@
-import LocationClass from "./location/location.class.js";
+import { EventEmitter } from "node:events";
+import LocationClass from "./location/location.js";
 import PlayerManager from "./player/player.manager.js";
 import CombatManager from "./combat/combat.manager.js";
 import OfficialMap from "./location/official-map.js";
 import { consola } from "consola";
-import BankClass from "./economy/Bank.class.js";
+import BankClass from "./economy/bank.js";
 import packageInfo from "../package.json" with { type: "json" };
 
 consola.success("🐉 DragonsOfLegends.js loaded successfully!");
@@ -38,7 +39,7 @@ interface WorldInitializationOptions {
     }
 }
 
-export default class World {
+export default class World extends EventEmitter {
     public readonly combat: CombatManager;
     public readonly location: LocationClass;
     public readonly bank: BankClass;
@@ -51,6 +52,8 @@ export default class World {
      * @returns void
      */
     public constructor(initializationOptions: WorldInitializationOptions = {}) {
+        super();
+        
         // Fusion propre des options par défaut et personnalisées
         this.initializationOptions = {
             premadeMap: true,
@@ -84,6 +87,9 @@ export default class World {
         
         this.initializeWorld(this.initializationOptions);
         this.setupRegeneration();
+        setTimeout(() => {
+            this.emit("gameLaunched");
+        }, 0);
     }
 
     /**

@@ -2,13 +2,13 @@
 import { PlayerClass } from "./player.class.js";
 import { consola } from "consola";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
-import { InventoryEntity } from "../inventory/inventory.class.js";
+import { InventoryEntity } from "../inventory/inventory.js";
 import { EnemyType } from "../enemy/enemy.type.js";
 import { ExplorationResult, GainExperienceResult, DamageResult } from "../types/result.js";
 import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError, UnknownPlayerClassError } from "../types/error.js";
 import World from "../world.js";
 import PlayerMarriage from "./player.marriage.js";
-import EnemyEntity from "../enemy/enemy.class.js";
+import EnemyEntity from "../enemy/enemy.js";
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 

@@ -1,6 +1,6 @@
 import { EnemyType } from "./enemy.type.js";
 import Player from "../player/player.entity.js";
-import Enemy from "./enemy.class.js";
+import Enemy from "./enemy.js";
 import { consola } from "consola";
 
 export interface EnemyStats {
