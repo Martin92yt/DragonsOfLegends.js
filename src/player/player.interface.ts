@@ -1,4 +1,7 @@
-import { PlayerClass } from "./player.class.js";
+import type { PlayerClassId } from "./player.class.js";
+import type { BestiaryState } from "../bestiary/bestiary.types.js";
+import type { PlayerJobsState } from "../jobs/job.types.js";
+import type { TitleDefinition } from "../title/title.types.js";
 
 /**
  * Represents the complete persistent data structure of a player.
@@ -9,7 +12,7 @@ export interface PlayerData {
     /** The name of the player. */
     name: string;
     /** The class identifier assigned to the player. */
-    classId: PlayerClass;
+    classId: PlayerClassId;
     /** The current location identifier where the player resides. */
     locationId: string;
     /** The current level of the player. */
@@ -38,6 +41,16 @@ export interface PlayerData {
     bankGold: number;
     /** Indicates whether the player's bank account is unlocked. */
     bankUnlocked: boolean;
+    /** The identifiers of the titles owned by the player. */
+    titles?: string[];
+    /** The identifier of the equipped title, or an empty string. */
+    equippedTitleId?: string;
+    /** The bestiary state (discovered species). */
+    bestiary?: BestiaryState;
+    /** The jobs state (levels, experience, tools, cooldowns). */
+    jobs?: PlayerJobsState;
+    /** Epoch ms at which a dead player respawns, or null/absent when alive. */
+    deadUntil?: number | null;
 }
 
 /**
@@ -49,7 +62,7 @@ export interface CreatePlayerOptions {
     /** The display name of the new player. */
     name: string;
     /** The class chosen for the new player. */
-    playerClass: PlayerClass;
+    playerClass: PlayerClassId;
 }
 
 /**
@@ -121,7 +134,7 @@ export interface PlayerSnapshot {
     /** The name of the player. */
     name: string;
     /** The class identifier of the player. */
-    classId: PlayerClass;
+    classId: PlayerClassId;
     /** The current level of the player. */
     level: number;
     /** The experience progression of the player. */
@@ -134,6 +147,8 @@ export interface PlayerSnapshot {
     locationId: string;
     /** The gold carried by the player. */
     gold: number;
+    /** The equipped title, or null. */
+    title: TitleDefinition | null;
 }
 
 /**
@@ -154,6 +169,16 @@ export interface PlayerRecord {
     bankGold: number;
     /** Indicates whether the bank is unlocked. */
     bankUnlocked: boolean;
+    /** The identifiers of the owned titles. */
+    titles: string[];
+    /** The identifier of the equipped title, or an empty string. */
+    equippedTitleId: string;
+    /** The bestiary state. */
+    bestiary: BestiaryState;
+    /** The jobs state. */
+    jobs: PlayerJobsState;
+    /** Epoch ms at which a dead player respawns, or null when alive. */
+    deadUntil: number | null;
 }
 
 /**

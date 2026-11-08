@@ -53,6 +53,7 @@ export default class PlayerMarriage {
      * @returns The current marriage manager instance.
      */
     public setPartner(newPartnerId: string): this {
+        this.player.assertCanAct("marriage.setPartner");
         try {
             this.withDatabase(db => {
                 const setMarriageTransaction = db.transaction(() => {
@@ -68,6 +69,8 @@ export default class PlayerMarriage {
 
             this.partnerId = newPartnerId;
             consola.success(`Player ${this.player.id} married ${newPartnerId}.`);
+            // Fire-and-forget: setPartner is synchronous, so asynchronous listeners are not awaited.
+            this.player.worldInstance.events.emit("marriageStart", { playerId: this.player.id, player: this.player, partnerId: newPartnerId });
             return this;
         } catch (error) {
             consola.error(`Failed to set marriage for player ${this.player.id}:`, error);
@@ -81,13 +84,16 @@ export default class PlayerMarriage {
      * @returns void
      */
     public divorce(): void {
+        this.player.assertCanAct("marriage.divorce");
         try {
             this.withDatabase(db => {
                 this.removeExistingMarriage(db);
             });
 
+            const formerPartnerId = this.partnerId;
             this.partnerId = "";
             consola.info(`Player ${this.player.id} divorced.`);
+            this.player.worldInstance.events.emit("marriageDivorce", { playerId: this.player.id, player: this.player, formerPartnerId });
         } catch (error) {
             consola.error(`Failed to process divorce for player ${this.player.id}:`, error);
             throw error;

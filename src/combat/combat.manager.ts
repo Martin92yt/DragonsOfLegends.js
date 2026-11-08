@@ -1,4 +1,6 @@
 import EnemyManager from "../enemy/enemy.manager.js";
+import type EnemyRegistry from "../enemy/enemy.registry.js";
+import type { EnemySpawnRule } from "../enemy/enemy.definition.js";
 import PlayerEntity from "../player/player.entity.js";
 import { consola } from "consola";
 import Combat from "./combat.js";
@@ -8,7 +10,18 @@ import EnemyEntity from "../enemy/enemy.js";
 
 export default class CombatManager {
     private readonly activeCombatMap = new Map<string, Combat>();
-    private readonly enemyManagerInstance = new EnemyManager();
+    private readonly enemyManagerInstance: EnemyManager;
+
+    /**
+     * Creates the combat manager.
+     *
+     * @param enemies The enemy registry spawns are drawn from. Without it, a private registry holding the official enemies is used.
+     * @param spawnRules The rules choosing the enemy tier from the player level.
+     * @param resolvePlayer Looks up a loaded player by identifier, so `attack` can report a death before anything else.
+     */
+    public constructor(enemies?: EnemyRegistry, spawnRules?: readonly EnemySpawnRule[], private readonly resolvePlayer?: (playerId: string) => PlayerEntity | undefined) {
+        this.enemyManagerInstance = new EnemyManager(enemies, spawnRules);
+    }
 
     /**
      * Checks if a player is already in an active combat.
@@ -30,6 +43,13 @@ export default class CombatManager {
         playerEntity.inCombat = true;
         this.activeCombatMap.set(playerEntity.id, newCombatInstance);
         consola.success(`Combat started for ${playerEntity.name}.`);
+        // Fire-and-forget: combat start is synchronous, so asynchronous listeners are not awaited.
+        playerEntity.worldInstance.events.emit("combatStart", {
+            playerId: playerEntity.id,
+            player: playerEntity,
+            combat: newCombatInstance,
+            enemy: enemyEntity
+        });
         return newCombatInstance;
     }
 
@@ -37,6 +57,7 @@ export default class CombatManager {
      * Starts a combat against a randomly selected enemy.
      */
     public start(playerEntity: PlayerEntity): Combat {
+        playerEntity.assertCanAct("combat.start");
         const generatedEnemyEntity = this.enemyManagerInstance.create(playerEntity);
         return this.registerCombat(playerEntity, generatedEnemyEntity);
     }
@@ -45,6 +66,7 @@ export default class CombatManager {
      * Starts a combat against a specific enemy.
      */
     public startWithEnemy(playerEntity: PlayerEntity, enemyEntity: EnemyEntity): Combat {
+        playerEntity.assertCanAct("combat.start");
         return this.registerCombat(playerEntity, enemyEntity);
     }
 
@@ -52,6 +74,8 @@ export default class CombatManager {
      * Performs an attack for a player in combat.
      */
     public async attack(targetPlayerId: string): Promise<CombatResult> {
+        // A dead player must be told they are dead, not that they are "not in combat" (their combat was closed by their death).
+        this.resolvePlayer?.(targetPlayerId)?.assertCanAct("combat.attack");
         const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
         if (!activeCombatInstance) {
             consola.warn(`Attack failed: player with ID ${targetPlayerId} is not in combat.`);
@@ -62,6 +86,13 @@ export default class CombatManager {
         const combatTurnResult = await activeCombatInstance.attack();
         if (combatTurnResult.victory || combatTurnResult.defeat) {
             this.clear(targetPlayerId);
+            await activeCombatInstance.playerEntity.worldInstance.events.emitAsync("combatEnd", {
+                playerId: targetPlayerId,
+                player: activeCombatInstance.playerEntity,
+                combat: activeCombatInstance,
+                enemy: activeCombatInstance.enemyEntity,
+                outcome: combatTurnResult.victory ? "victory" : "defeat"
+            });
         }
         return combatTurnResult;
     }
@@ -111,6 +142,13 @@ export default class CombatManager {
             affectedPlayerEntity.addXP(affectedPlayerEntity.level * 5);
             affectedPlayerEntity.gold += Math.floor(affectedPlayerEntity.gold * 0.005);
             affectedPlayerEntity.inCombat = false;
+            affectedPlayerEntity.worldInstance.events.emit("combatEnd", {
+                playerId: affectedPlayerEntity.id,
+                player: affectedPlayerEntity,
+                combat: activeCombatInstance,
+                enemy: activeCombatInstance.enemyEntity,
+                outcome: "aborted"
+            });
         }
         this.activeCombatMap.clear();
         consola.success("All active combats stopped.");

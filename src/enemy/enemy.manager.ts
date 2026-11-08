@@ -1,77 +1,62 @@
-import { EnemyType } from "./enemy.type.js";
-import Player from "../player/player.entity.js";
-import Enemy from "./enemy.js";
 import { consola } from "consola";
+import Player from "../player/player.entity.js";
+import { NoEnemyAvailableError } from "../types/error.js";
+import { DEFAULT_ENEMY_SPAWN_RULES, type EnemyDefinition, type EnemySpawnRule } from "./enemy.definition.js";
+import EnemyRegistry from "./enemy.registry.js";
+import { registerOfficialEnemies } from "./official-enemies.js";
+import Enemy from "./enemy.js";
 
-export interface EnemyStats {
-    name: string;
-    health: number;
-    strength: number;
-    defense: number;
-    experience: number;
-    gold: number;
-}
-
-type EnemyTier = "beginner" | "intermediate" | "advanced" | "boss";
-
+/**
+ * Creates the enemies met by players, from the enemy registry.
+ */
 export default class EnemyManager {
     // Rebalanced elite spawn frequency and stat scaling factor to curb exponential difficulty spikes.
     private static readonly ELITE_SPAWN_CHANCE = 0.08;
     private static readonly BASE_STAT_SCALE_FACTOR = 0.09;
 
-    private readonly enemyBaseStatsRegistry: Record<EnemyType, EnemyStats> = {
-        [EnemyType.Goblin]: { name: "Goblin", health: 50, strength: 6, defense: 2, experience: 25, gold: 8 },
-        [EnemyType.Wolf]: { name: "Wild Wolf", health: 40, strength: 8, defense: 2, experience: 30, gold: 10 },
-        [EnemyType.Slime]: { name: "Gooey Slime", health: 35, strength: 4, defense: 1, experience: 15, gold: 4 },
-        [EnemyType.Bandit]: { name: "Highway Bandit", health: 65, strength: 9, defense: 4, experience: 45, gold: 20 },
-        [EnemyType.GiantRat]: { name: "Giant Rat", health: 30, strength: 5, defense: 1, experience: 10, gold: 3 },
-        [EnemyType.WildBoar]: { name: "Furious Boar", health: 55, strength: 10, defense: 3, experience: 35, gold: 12 },
-        [EnemyType.Skeleton]: { name: "Warrior Skeleton", health: 60, strength: 7, defense: 5, experience: 40, gold: 16 },
-        [EnemyType.Spider]: { name: "Giant Spider", health: 45, strength: 11, defense: 3, experience: 45, gold: 15 },
-        [EnemyType.Orc]: { name: "Brutal Orc", health: 90, strength: 14, defense: 6, experience: 75, gold: 35 },
-        [EnemyType.Ghost]: { name: "Wandering Specter", health: 50, strength: 12, defense: 8, experience: 65, gold: 28 },
-        [EnemyType.Zombie]: { name: "Rotten Zombie", health: 80, strength: 10, defense: 4, experience: 50, gold: 18 },
-        [EnemyType.DarkCultist]: { name: "Shadow Cultist", health: 70, strength: 16, defense: 3, experience: 85, gold: 48 },
-        [EnemyType.Troll]: { name: "Cave Troll", health: 150, strength: 20, defense: 10, experience: 150, gold: 95 },
-        [EnemyType.Minotaur]: { name: "Enraged Minotaur", health: 180, strength: 25, defense: 12, experience: 200, gold: 130 },
-        [EnemyType.Vampire]: { name: "Vampire Lord", health: 130, strength: 22, defense: 9, experience: 220, gold: 160 },
-        [EnemyType.Witch]: { name: "Swamp Witch", health: 90, strength: 28, defense: 5, experience: 180, gold: 120 },
-        [EnemyType.StoneGolem]: { name: "Stone Golem", health: 250, strength: 18, defense: 25, experience: 250, gold: 180 },
-        [EnemyType.Lich]: { name: "Supreme Lich", health: 300, strength: 35, defense: 15, experience: 500, gold: 400 },
-        [EnemyType.DemonLord]: { name: "Demon Lord", health: 450, strength: 45, defense: 20, experience: 800, gold: 680 },
-        [EnemyType.AncientDragon]: { name: "Ancient Dragon", health: 700, strength: 60, defense: 30, experience: 1500, gold: 1500 },
-        [EnemyType.Hydra]: { name: "Seven-Headed Hydra", health: 600, strength: 50, defense: 22, experience: 1200, gold: 1250 },
-    };
+    private readonly registry: EnemyRegistry;
+    private readonly spawnRules: readonly EnemySpawnRule[];
 
-    private readonly enemyTierPools: Record<EnemyTier, readonly EnemyType[]> = {
-        beginner: [EnemyType.Goblin, EnemyType.Wolf, EnemyType.Slime, EnemyType.GiantRat, EnemyType.WildBoar],
-        intermediate: [EnemyType.Bandit, EnemyType.Skeleton, EnemyType.Spider, EnemyType.Orc, EnemyType.Ghost, EnemyType.Zombie],
-        advanced: [EnemyType.DarkCultist, EnemyType.Troll, EnemyType.Minotaur, EnemyType.Vampire, EnemyType.Witch, EnemyType.StoneGolem],
-        boss: [EnemyType.Lich, EnemyType.DemonLord, EnemyType.AncientDragon, EnemyType.Hydra],
-    };
+    /**
+     * Creates an enemy manager.
+     *
+     * @param registry The registry holding the enemy species. Defaults to a private registry preloaded with
+     * the official enemies, which keeps `new EnemyManager()` usable on its own.
+     * @param spawnRules The rules choosing the tier from the player level ({@link DEFAULT_ENEMY_SPAWN_RULES} by default).
+     */
+    public constructor(registry?: EnemyRegistry, spawnRules: readonly EnemySpawnRule[] = DEFAULT_ENEMY_SPAWN_RULES) {
+        if (registry) {
+            this.registry = registry;
+        } else {
+            this.registry = new EnemyRegistry();
+            registerOfficialEnemies(this.registry);
+        }
+        this.spawnRules = spawnRules;
+    }
 
     /**
      * Creates a random enemy based on the player's level.
      *
      * @param playerEntity The player used to determine the enemy difficulty.
      * @returns A newly created enemy instance.
+     * @throws {NoEnemyAvailableError} If no enemy is registered.
      */
     public create(playerEntity: Player): Enemy {
-        const availableEnemyPool = this.getEnemyPool(playerEntity.level);
-        const randomSelectedEnemyType = availableEnemyPool[Math.floor(Math.random() * availableEnemyPool.length)];
-        return this.createOfType(randomSelectedEnemyType, playerEntity.level);
+        const availablePool = this.getEnemyPool(playerEntity.level);
+        const selected = availablePool[Math.floor(Math.random() * availablePool.length)] as EnemyDefinition;
+        return this.createOfType(selected.id, playerEntity.level);
     }
 
     /**
-     * Creates an enemy of a specific type.
+     * Creates an enemy of a specific species.
      *
-     * @param enemyType The enemy type to create.
+     * @param enemyType The identifier of the species to create.
      * @param playerLevel The player level used for enemy scaling.
-     * @returns A newly created enemy instance.
+     * @returns A newly created enemy instance (a generic fallback enemy if the species is unknown).
      */
-    public createOfType(enemyType: EnemyType, playerLevel = 1): Enemy {
-        const baseEnemyStats = this.enemyBaseStatsRegistry[enemyType];
-        if (!baseEnemyStats) {
+    public createOfType(enemyType: string, playerLevel = 1): Enemy {
+        const definition = this.registry.get(enemyType);
+        if (!definition) {
             consola.error(`Failed to create enemy: unknown enemy type ${enemyType}.`);
             return new Enemy(enemyType, "Unknown Enemy", 50, 50, 5, 2, 10, 5);
         }
@@ -81,24 +66,25 @@ export default class EnemyManager {
         const eliteAttributeMultiplier = isEliteEnemy ? 1.4 : 1;
         const rewardMultiplier = isEliteEnemy ? 1.75 : 1;
 
-        const resolvedEnemyName = isEliteEnemy ? `★ ${baseEnemyStats.name} (Elite)` : baseEnemyStats.name;
-        const scaledHealthPoints = this.calculateStat(baseEnemyStats.health, statScalingMultiplier * eliteAttributeMultiplier);
-        const scaledStrength = this.calculateStat(baseEnemyStats.strength, statScalingMultiplier * eliteAttributeMultiplier);
-        const scaledDefense = this.calculateStat(baseEnemyStats.defense, statScalingMultiplier * eliteAttributeMultiplier, 0);
-        const scaledExperienceReward = this.calculateStat(baseEnemyStats.experience, statScalingMultiplier * rewardMultiplier);
-        const scaledGoldReward = this.calculateStat(baseEnemyStats.gold, statScalingMultiplier * rewardMultiplier);
+        const resolvedEnemyName = isEliteEnemy ? `★ ${definition.name} (Elite)` : definition.name;
+        const scaledHealthPoints = this.calculateStat(definition.health, statScalingMultiplier * eliteAttributeMultiplier);
+        const scaledStrength = this.calculateStat(definition.strength, statScalingMultiplier * eliteAttributeMultiplier);
+        const scaledDefense = this.calculateStat(definition.defense, statScalingMultiplier * eliteAttributeMultiplier, 0);
+        const scaledExperienceReward = this.calculateStat(definition.experience, statScalingMultiplier * rewardMultiplier);
+        const scaledGoldReward = this.calculateStat(definition.gold, statScalingMultiplier * rewardMultiplier);
 
         consola.success(`Spawned enemy: ${resolvedEnemyName} (Lv. ${playerLevel}).`);
 
         return new Enemy(
-            enemyType,
+            definition.id,
             resolvedEnemyName,
             scaledHealthPoints,
             scaledHealthPoints,
             scaledStrength,
             scaledDefense,
             scaledExperienceReward,
-            scaledGoldReward
+            scaledGoldReward,
+            definition.loot ?? []
         );
     }
 
@@ -111,25 +97,47 @@ export default class EnemyManager {
     }
 
     /**
-     * Selects an enemy pool based on the player's level.
+     * Selects an enemy pool based on the player's level and the spawn rules.
+     * Falls back to every registered enemy when the chosen tier is empty.
      *
      * @param playerLevel The player level used to determine the difficulty tier.
-     * @returns A pool of possible enemy types.
+     * @returns A non-empty pool of enemy definitions.
+     * @throws {NoEnemyAvailableError} If no enemy is registered.
      */
-    private getEnemyPool(playerLevel: number): readonly EnemyType[] {
+    private getEnemyPool(playerLevel: number): ReadonlyArray<Readonly<EnemyDefinition>> {
+        const tier = this.pickTier(playerLevel);
+        const tierPool = tier === undefined ? [] : this.registry.listByTier(tier);
+        if (tierPool.length > 0) return tierPool;
+
+        const everyEnemy = this.registry.list();
+        if (everyEnemy.length === 0) throw new NoEnemyAvailableError();
+        consola.warn(`No enemy registered for tier "${tier ?? "?"}"; picking among every registered enemy.`);
+        return everyEnemy;
+    }
+
+    /**
+     * Chooses a tier from the spawn rules.
+     *
+     * @param playerLevel The player level.
+     * @returns The tier name, or undefined if the rules define none.
+     */
+    private pickTier(playerLevel: number): string | undefined {
+        const firstRule = this.spawnRules[0];
         if (playerLevel < 1) {
-            consola.warn(`Invalid player level ${playerLevel} encountered; defaulting pool to beginner tier.`);
-            return this.enemyTierPools.beginner;
+            consola.warn(`Invalid player level ${playerLevel} encountered; defaulting pool to the first tier.`);
+            return firstRule ? Object.keys(firstRule.tiers)[0] : undefined;
         }
 
-        if (playerLevel < 3) {
-            return Math.random() < 0.85 ? this.enemyTierPools.beginner : this.enemyTierPools.intermediate;
-        }
+        const rule = this.spawnRules.find((candidate) => playerLevel < candidate.belowLevel) ?? this.spawnRules[this.spawnRules.length - 1];
+        if (!rule) return undefined;
 
-        if (playerLevel < 6) {
-            return Math.random() < 0.75 ? this.enemyTierPools.intermediate : this.enemyTierPools.advanced;
+        const weighted = Object.entries(rule.tiers);
+        const total = weighted.reduce((sum, [, weight]) => sum + weight, 0);
+        let threshold = Math.random() * total;
+        for (const [tier, weight] of weighted) {
+            if (threshold < weight) return tier;
+            threshold -= weight;
         }
-
-        return Math.random() < 0.9 ? this.enemyTierPools.advanced : this.enemyTierPools.boss;
+        return weighted[weighted.length - 1]?.[0];
     }
 }

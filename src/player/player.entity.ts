@@ -1,14 +1,20 @@
     import { handlePlayerDeath, DeathResult } from "./Player.death.js";
-import { PlayerClass } from "./player.class.js";
+import type { PlayerClassId } from "./player.class.js";
 import { consola } from "consola";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
 import { InventoryEntity } from "../inventory/inventory.js";
-import { EnemyType } from "../enemy/enemy.type.js";
+import type { AmbushZone, EnemyDefinition } from "../enemy/enemy.definition.js";
 import { ExplorationResult, GainExperienceResult, DamageResult } from "../types/result.js";
-import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError, UnknownPlayerClassError } from "../types/error.js";
+import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError } from "../types/error.js";
 import World from "../world.js";
 import PlayerMarriage from "./player.marriage.js";
+import PlayerTitles from "./player.titles.js";
+import PlayerBestiary from "./player.bestiary.js";
+import PlayerJobs from "./player.jobs.js";
+import PlayerLife from "./player.life.js";
+import ItemBank from "../economy/item-bank.js";
 import EnemyEntity from "../enemy/enemy.js";
+import type Combat from "../combat/combat.js";
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
@@ -34,7 +40,7 @@ export default class PlayerEntity {
 
     public readonly worldInstance: World;
     public level: number;
-    public gold: number;
+    private goldBalance: number;
     public experience: PlayerExperience;
     public health: PlayerHealth;
     public attributes: PlayerAttributes;
@@ -42,9 +48,14 @@ export default class PlayerEntity {
     public bankUnlocked: boolean;
     public readonly inventory: InventoryEntity;
     public marriage: PlayerMarriage;
+    public readonly titles: PlayerTitles;
+    public readonly itemBank: ItemBank;
+    public readonly bestiary: PlayerBestiary;
+    public readonly jobs: PlayerJobs;
     public isTravelling = false;
     public inCombat = false;
-    public isDead = false;
+    /** Life state: the single source of truth for whether the player can act (see {@link PlayerEntity.assertCanAct}). */
+    public readonly life: PlayerLife;
     
     /**
      * Creates a player entity.
@@ -67,13 +78,17 @@ export default class PlayerEntity {
      * @param gold The initial gold amount.
      * @param bankGold The initial bank gold amount.
      * @param bankUnlocked Whether the bank account is unlocked.
+     * @param titles The identifiers of the owned titles.
+     * @param equippedTitleId The identifier of the equipped title, or an empty string.
+     * @param bestiaryState The saved bestiary state (validated).
+     * @param jobsState The saved jobs state (validated).
      * @returns void
      */
     public constructor(
         worldInstance: World,
         public readonly id: string,
         public name: string,
-        public readonly classId: PlayerClass,
+        public readonly classId: PlayerClassId,
         public location: string,
         level = 1,
         experience = 0,
@@ -88,10 +103,15 @@ export default class PlayerEntity {
         intelligence?: number,
         defense?: number,
         attributePoints = 0,
+        titles: readonly string[] = [],
+        equippedTitleId = "",
+        bestiaryState: unknown = {},
+        jobsState: unknown = {},
+        deadUntil: number | null = null
     ) {
         this.worldInstance = worldInstance;
         this.level = Math.max(1, level);
-        this.gold = Math.max(0, gold);
+        this.goldBalance = Math.max(0, gold);
         this.bankGold = Math.max(0, bankGold);
         this.bankUnlocked = bankUnlocked;
 
@@ -117,7 +137,37 @@ export default class PlayerEntity {
 
         this.inventory = new InventoryEntity(this.id, this);
         this.marriage = new PlayerMarriage(this, partnerId);
+        this.titles = new PlayerTitles(this, titles, equippedTitleId);
+        this.itemBank = new ItemBank(this);
+        this.bestiary = new PlayerBestiary(bestiaryState, worldInstance.enemies);
+        this.jobs = new PlayerJobs(this, jobsState);
+        this.life = new PlayerLife(this, deadUntil);
         this.updateMaxHealth();
+    }
+
+    /**
+     * Gold carried by the player (the wallet).
+     */
+    public get gold(): number {
+        return this.goldBalance;
+    }
+
+    /**
+     * Sets the wallet and emits `playerGoldChange` when the value changes.
+     *
+     * The setter cannot be awaited, so the event is emitted fire-and-forget: asynchronous listeners are not awaited.
+     */
+    public set gold(value: number) {
+        const previous = this.goldBalance;
+        if (value === previous) return;
+        this.goldBalance = value;
+        this.worldInstance.events.emit("playerGoldChange", {
+            playerId: this.id,
+            player: this,
+            previous,
+            current: value,
+            delta: value - previous
+        });
     }
 
     /**
@@ -129,22 +179,55 @@ export default class PlayerEntity {
      * @returns A promise that resolves to the exploration result.
      * @throws PlayerAlreadyTravellingError If the player is already travelling.
      * @throws MoveInCombatError If the player is currently in combat.
+     * @throws PlayerDeadError If the player is dead.
      */
     public async moveTo(destinationId: string, distance = 1, danger = 1): Promise<ExplorationResult> {
+        this.assertCanAct("player.moveTo");
         this.validateTravelState();
         this.isTravelling = true;
 
         try {
             const { travelDurationMs, willBeAmbushed } = this.calculateTravelParameters(distance, danger);
+            const originId = this.location;
+            const { events } = this.worldInstance;
 
+            // Fire-and-forget on purpose: the travel timer must be armed in the same tick as the call.
+            events.emit("travelStart", {
+                playerId: this.id,
+                player: this,
+                fromId: originId,
+                toId: destinationId,
+                distance,
+                danger,
+                durationMs: travelDurationMs
+            });
             await new Promise<void>(resolve => setTimeout(resolve, travelDurationMs));
 
             if (willBeAmbushed) {
-                return this.handleAmbush(destinationId, travelDurationMs);
+                const ambush = this.handleAmbush(destinationId, travelDurationMs);
+                if (ambush) {
+                    await events.emitAsync("travelAmbush", {
+                        playerId: this.id,
+                        player: this,
+                        fromId: originId,
+                        toId: destinationId,
+                        enemy: ambush.enemy,
+                        combat: ambush.combat
+                    });
+                    return ambush.exploration;
+                }
             }
 
             this.location = destinationId;
             consola.success(`Player ${this.name} arrived at ${destinationId}.`);
+            await events.emitAsync("travelComplete", {
+                playerId: this.id,
+                player: this,
+                fromId: originId,
+                toId: destinationId,
+                distance,
+                durationMs: travelDurationMs
+            });
 
             return {
                 arrived: true,
@@ -176,12 +259,24 @@ export default class PlayerEntity {
 
         this.experience.current += amount;
         let isLeveledUp = false;
+        let levelsGained = 0;
 
         while (this.experience.current >= this.experience.required) {
             this.experience.current -= this.experience.required;
             this.levelUp();
             isLeveledUp = true;
+            levelsGained++;
         }
+
+        // Fire-and-forget: addXP is synchronous, so asynchronous listeners are not awaited.
+        this.worldInstance.events.emit("playerExperienceGain", {
+            playerId: this.id,
+            player: this,
+            amount,
+            experience: this.experience.current,
+            required: this.experience.required,
+            levelsGained
+        });
 
         return {
             gainedAmount: amount,
@@ -211,16 +306,26 @@ export default class PlayerEntity {
         const reducedDamage = Math.max(1, Math.floor(damage * mitigationFactor));
 
         this.health.current = Math.max(0, this.health.current - reducedDamage);
+        await this.worldInstance.events.emitAsync("playerDamage", {
+            playerId: this.id,
+            player: this,
+            rawDamage: damage,
+            damage: reducedDamage,
+            health: this.health.current,
+            maxHealth: this.health.max
+        });
 
         let deathResult: DeathResult | null = null;
         
         // 🚨 VÉRIFICATION DE LA MORT (Sécurisé avec <= 0)
         if (this.health.current <= 0) {
-            deathResult = handlePlayerDeath(this);
+            deathResult = await handlePlayerDeath(this);
         }
 
-        // 2. Ajouter 'await' ici aussi (car save() est async)
-        await this.inventory.save(items);
+        // 2. Ne pas réécrire l'instantané `items` après une mort : il écraserait la perte d'objets déjà persistée
+        if (!deathResult) {
+            await this.inventory.save(items);
+        }
 
         return {
             reducedDamage,
@@ -229,6 +334,25 @@ export default class PlayerEntity {
             // On inclut les détails de la mort dans le retour si le joueur est mort
             ...(deathResult ? { death: deathResult } : {})
         };
+    }
+
+    /**
+     * Whether the player is dead (respawn cooldown running, or permanently dead). An elapsed cooldown revives the player.
+     */
+    public get isDead(): boolean {
+        return this.life.isDead;
+    }
+
+    /**
+     * Strict gate of every player action: refuses the action of a dead player.
+     * It is called first in each action (move, combat, inventory, bank, jobs, marriage, titles...).
+     *
+     * @param action The name of the action, reported in the error (e.g. `combat.attack`).
+     * @returns void
+     * @throws {PlayerDeadError} If the player is dead, with the time left before the respawn.
+     */
+    public assertCanAct(action: string): void {
+        this.life.assertCanAct(action);
     }
 
     /**
@@ -248,6 +372,7 @@ export default class PlayerEntity {
      * @throws NoAttributePointsError If no attribute points are available.
      */
     public levelUpSkill(attribute: Attribute): void {
+        this.assertCanAct("player.levelUpSkill");
         if (this.attributes.points <= 0) {
             consola.warn(`Player ${this.name} attempted to upgrade attribute without available points.`);
             throw new NoAttributePointsError();
@@ -255,6 +380,13 @@ export default class PlayerEntity {
 
         this.attributes[attribute]++;
         this.attributes.points--;
+        this.worldInstance.events.emit("playerAttributeUpgrade", {
+            playerId: this.id,
+            player: this,
+            attribute,
+            value: this.attributes[attribute],
+            remainingPoints: this.attributes.points
+        });
         consola.success(`Player ${this.name} upgraded attribute ${attribute}.`);
     }
 
@@ -273,7 +405,8 @@ export default class PlayerEntity {
             gold: this.gold,
             experience: { ...this.experience },
             health: { ...this.health },
-            attributes: { ...this.attributes }
+            attributes: { ...this.attributes },
+            title: this.titles.getEquipped() ?? null
         };
     }
 
@@ -377,21 +510,40 @@ export default class PlayerEntity {
     }
 
     /**
+     * Picks the enemy of an ambush among the registered enemies able to ambush in a zone.
+     *
+     * @param zone The zone of the destination.
+     * @returns The picked species, or undefined if none is registered for the zone.
+     */
+    private pickAmbusher(zone: AmbushZone): Readonly<EnemyDefinition> | undefined {
+        const candidates = this.worldInstance.enemies.listAmbushers(zone);
+        const weightOf = (definition: Readonly<EnemyDefinition>): number => definition.ambush?.[zone]?.weight ?? 1;
+        const total = candidates.reduce((sum, definition) => sum + weightOf(definition), 0);
+
+        let threshold = Math.random() * total;
+        for (const candidate of candidates) {
+            threshold -= weightOf(candidate);
+            if (threshold < 0) return candidate;
+        }
+        return candidates[candidates.length - 1];
+    }
+
+    /**
      * Handles an ambush encountered during travel.
      *
      * @param destinationId The destination location identifier.
      * @param travelDurationMs The travel time before the ambush.
-     * @returns The exploration result containing the spawned enemy.
+     * @returns The exploration result containing the spawned enemy, or undefined when no registered enemy can
+     * ambush in the zone (the player then arrives safely).
      */
-    private handleAmbush(destinationId: string, travelDurationMs: number): ExplorationResult {
+    private handleAmbush(destinationId: string, travelDurationMs: number): { exploration: ExplorationResult; combat: Combat; enemy: EnemyEntity } | undefined {
         const isWaterArea = /water|sea|ocean|lake|river|lac|eau/i.test(destinationId);
-        const enemyTypes = isWaterArea
-            ? [EnemyType.Hydra, EnemyType.GiantRat]
-            : [EnemyType.Slime, EnemyType.Goblin, EnemyType.Wolf, EnemyType.Bandit, EnemyType.WildBoar, EnemyType.Skeleton];
+        const ambusher = this.pickAmbusher(isWaterArea ? "water" : "land");
+        if (!ambusher) return undefined;
 
-        const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+        const enemyType = ambusher.id;
         const enemyName = `${enemyType.charAt(0).toUpperCase()}${enemyType.slice(1)}`;
-        
+
         const baseHealth = 30 + this.level * 7;
         const enemyGoldReward = Math.max(2, Math.floor(4 + this.level * 2.5));
 
@@ -403,16 +555,21 @@ export default class PlayerEntity {
             5 + this.level * 1.2,
             1 + this.level * 0.7,
             8 * this.level,
-            enemyGoldReward
+            enemyGoldReward,
+            ambusher.loot ?? []
         );
 
-        this.worldInstance.combat.startWithEnemy(this, enemy);
+        const combat = this.worldInstance.combat.startWithEnemy(this, enemy);
 
         return {
-            arrived: false,
-            attacked: true,
-            travelDurationMs,
-            locationId: this.location,
+            exploration: {
+                arrived: false,
+                attacked: true,
+                travelDurationMs,
+                locationId: this.location,
+                enemy
+            },
+            combat,
             enemy
         };
     }
@@ -433,6 +590,13 @@ export default class PlayerEntity {
         this.attributes.points++;
         this.experience.required = this.level * PlayerEntity.XP_PER_LEVEL;
         consola.success(`Player ${this.name} reached level ${this.level}.`);
+        this.worldInstance.events.emit("playerLevelUp", {
+            playerId: this.id,
+            player: this,
+            previousLevel: this.level - 1,
+            level: this.level,
+            attributePoints: this.attributes.points
+        });
     }
 
     /**
@@ -442,16 +606,8 @@ export default class PlayerEntity {
      * @throws UnknownPlayerClassError If the player class is unknown.
      */
     private generateBaseStats(): ClassStats {
-        const stats: Record<PlayerClass, ClassStats> = {
-            [PlayerClass.Warrior]: { strength: 10, agility: 4, intelligence: 3, defense: 8 },
-            [PlayerClass.Explorer]: { strength: 6, agility: 8, intelligence: 6, defense: 5 },
-            [PlayerClass.Rogue]: { strength: 5, agility: 10, intelligence: 4, defense: 4 }
-        };
-
-        const baseStats = stats[this.classId];
-        if (!baseStats) {
-            throw new UnknownPlayerClassError(this.classId);
-        }
+        // Throws UnknownPlayerClassError when the class is not registered in the world.
+        const { baseStats } = this.worldInstance.classes.require(this.classId);
 
         const randomize = (value: number): number => Math.max(1, Math.round(value * (0.9 + Math.random() * 0.2)));
 

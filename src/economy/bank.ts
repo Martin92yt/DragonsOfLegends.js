@@ -78,6 +78,7 @@ export default class BankClass {
      * Deposits money from wallet to bank.
      */
     public async deposit(playerEntity: PlayerEntity, depositAmount: number): Promise<BankResult> {
+        playerEntity.assertCanAct("bank.deposit");
         this.validateTransaction(playerEntity, depositAmount, "Deposit");
 
         if (playerEntity.gold < depositAmount) {
@@ -98,6 +99,13 @@ export default class BankClass {
         playerEntity.bankGold += depositAmount;
 
         consola.success(`${playerEntity.name} deposited ${depositAmount} gold.`);
+        await this.worldInstance.events.emitAsync("bankDeposit", {
+            playerId: playerEntity.id,
+            player: playerEntity,
+            amount: depositAmount,
+            wallet: playerEntity.gold,
+            bankGold: playerEntity.bankGold
+        });
 
         return { balance: await this.getBalanceTotal(playerEntity), success: true };
     }
@@ -106,6 +114,7 @@ export default class BankClass {
      * Withdraws money from bank to wallet.
      */
     public async withdraw(playerEntity: PlayerEntity, withdrawalAmount: number): Promise<BankResult> {
+        playerEntity.assertCanAct("bank.withdraw");
         this.validateTransaction(playerEntity, withdrawalAmount, "Withdrawal");
 
         const totalBankBeforeWithdrawal = await this.getBalanceTotal(playerEntity);
@@ -132,6 +141,13 @@ export default class BankClass {
         const totalBankAfterWithdrawal = await this.getBalanceTotal(playerEntity);
 
         consola.success(`${playerEntity.name} withdrew ${withdrawalAmount} gold.`);
+        await this.worldInstance.events.emitAsync("bankWithdraw", {
+            playerId: playerEntity.id,
+            player: playerEntity,
+            amount: withdrawalAmount,
+            wallet: playerEntity.gold,
+            bankGold: playerEntity.bankGold
+        });
 
         return { balance: totalBankAfterWithdrawal, success: true };
     }
@@ -152,6 +168,7 @@ export default class BankClass {
      * Unlocks the player's bank account.
      */
     public unlock(playerEntity: PlayerEntity): boolean {
+        playerEntity.assertCanAct("bank.unlock");
         if (playerEntity.bankUnlocked) {
             consola.warn(`Bank unlock skipped: account is already unlocked for ${playerEntity.name}.`);
             return false;
@@ -171,6 +188,8 @@ export default class BankClass {
 
         playerEntity.bankUnlocked = true;
         consola.success(`Bank account unlocked for ${playerEntity.name}.`);
+        // Fire-and-forget: unlock is synchronous, so asynchronous listeners are not awaited.
+        this.worldInstance.events.emit("bankUnlock", { playerId: playerEntity.id, player: playerEntity, cost: unlockCost });
         return true;
     }
 

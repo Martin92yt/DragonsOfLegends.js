@@ -30,13 +30,21 @@ export default class Combat {
      * Executes one combat turn.
      */
     public async attack(): Promise<CombatResult> {
+        this.playerEntity.assertCanAct("combat.attack");
         const inflictedEnemyDamage = await this.executePlayerTurn();
 
-        if (!this.enemyEntity.isAlive()) {
-            return this.handleEnemyDefeat(inflictedEnemyDamage);
-        }
+        const result = this.enemyEntity.isAlive()
+            ? await this.executeEnemyTurn(inflictedEnemyDamage)
+            : await this.handleEnemyDefeat(inflictedEnemyDamage);
 
-        return this.executeEnemyTurn(inflictedEnemyDamage);
+        await this.playerEntity.worldInstance.events.emitAsync("combatTurn", {
+            playerId: this.playerEntity.id,
+            player: this.playerEntity,
+            combat: this,
+            enemy: this.enemyEntity,
+            result
+        });
+        return result;
     }
 
     /**
@@ -50,10 +58,23 @@ export default class Combat {
     /**
      * Handles rewards and state when the enemy is defeated.
      */
-    private handleEnemyDefeat(inflictedEnemyDamage: number): CombatResult {
+    private async handleEnemyDefeat(inflictedEnemyDamage: number): Promise<CombatResult> {
         this.playerEntity.addXP(this.enemyEntity.experience);
         this.playerEntity.gold += this.enemyEntity.gold;
         consola.success(`${this.playerEntity.name} defeated ${this.enemyEntity.name}.`);
+
+        // Listeners (bestiary, achievements...) are awaited so their effects are visible when the result is returned.
+        await this.playerEntity.worldInstance.events.emitAsync("enemyDefeat", {
+            playerId: this.playerEntity.id,
+            player: this.playerEntity,
+            combat: this,
+            enemy: this.enemyEntity,
+            enemyId: this.enemyEntity.name,
+            enemyType: this.enemyEntity.type,
+            locationId: this.playerEntity.location,
+            experience: this.enemyEntity.experience,
+            gold: this.enemyEntity.gold
+        });
 
         return {
             playerDamage: 0,
@@ -155,18 +176,13 @@ export default class Combat {
      * Gets the player's base attack stat according to their class.
      */
     private getPlayerAttackStat(): number {
-        const classAttributeMap: Readonly<Record<string, number>> = {
-            warrior: this.playerEntity.attributes.strength,
-            explorer: this.playerEntity.attributes.agility,
-            mage: this.playerEntity.attributes.intelligence
-        };
-
-        const resolvedPlayerStat = classAttributeMap[this.playerEntity.classId];
-        if (resolvedPlayerStat === undefined) {
+        const classDefinition = this.playerEntity.worldInstance.classes.get(this.playerEntity.classId);
+        if (!classDefinition) {
             consola.warn(`Unknown player class identifier '${this.playerEntity.classId}'; defaulting attack stat to strength.`);
             return this.playerEntity.attributes.strength;
         }
 
+        const resolvedPlayerStat = this.playerEntity.attributes[classDefinition.attackStat ?? "strength"];
         return resolvedPlayerStat;
     }
 

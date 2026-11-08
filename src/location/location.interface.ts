@@ -42,3 +42,19 @@ export interface LocationCreateResult {
     readonly locationFlags: LocationFlags;
     readonly travelConnections: LocationTravelConnections;
 }
+/**
+ * A bidirectional connection between two existing locations, typically used by a content pack to plug
+ * new locations into the existing map.
+ */
+export interface LocationLinkSpec {
+    /** The first location identifier. */
+    readonly from: string;
+    /** The second location identifier. */
+    readonly to: string;
+    /** The transport mode of the connection. */
+    readonly mode: "landRoutes" | "boatRoutes";
+    /** The travel distance. @defaultValue 1 */
+    readonly distance?: number;
+    /** The danger level. @defaultValue 0 */
+    readonly danger?: number;
+}

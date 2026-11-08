@@ -1,5 +1,5 @@
 import { LocationFlags, hasFlag } from "./location.flags.js";
-import { LocationCreateParametres, LocationCreateResult } from "./location.interface.js";
+import { LocationCreateParametres, LocationCreateResult, LocationLinkSpec } from "./location.interface.js";
 import { consola } from "consola";
 import { LocationBuilder } from "./location.builder.js";
 import {
@@ -29,6 +29,44 @@ export default class LocationManager {
      */
     public bulkCreate(locationItems: readonly (LocationCreateParametres | LocationBuilder)[]): LocationCreateResult[] {
         return locationItems.map(item => this.create(item instanceof LocationBuilder ? item.build() : item));
+    }
+
+    /**
+     * Registers locations atomically and validates the resulting graph.
+     * If a location is invalid or the graph is inconsistent, every change is reverted.
+     *
+     * Intended for content packs: the graph must stay valid once the locations are added (a single starting
+     * city, reciprocal connections, every location reachable).
+     *
+     * @param locationItems The location parameters or location builders.
+     * @param links Bidirectional connections applied after the creation, e.g. to plug the new locations into existing ones.
+     * @returns An array of created location results.
+     * @throws The same errors as {@link LocationManager.create}, {@link LocationManager.link} and {@link LocationManager.validate}.
+     */
+    public registerAll(locationItems: readonly (LocationCreateParametres | LocationBuilder)[], links: readonly LocationLinkSpec[] = []): LocationCreateResult[] {
+        const restore = this.snapshot();
+        try {
+            const created = this.bulkCreate(locationItems);
+            for (const { from, to, mode, distance, danger } of links) this.link(from, to, mode, distance, danger);
+            this.validate();
+            return created;
+        } catch (error) {
+            restore();
+            throw error;
+        }
+    }
+
+    /**
+     * Captures the current locations.
+     *
+     * @returns A function restoring the captured state (without validation).
+     */
+    public snapshot(): () => void {
+        const saved = [...this.locationsMap.entries()].map(([locationId, location]) => [locationId, structuredClone(location)] as const);
+        return () => {
+            this.locationsMap.clear();
+            for (const [locationId, location] of saved) this.locationsMap.set(locationId, structuredClone(location));
+        };
     }
 
     /**

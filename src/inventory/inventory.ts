@@ -122,12 +122,15 @@ export class InventoryEntity {
         const inputItemNbtData = typeof itemInput === "string" ? null : itemInput.data ?? null;
         const resolvedItemData = itemNbtData ?? inputItemNbtData;
         const inventoryItems = await this.load();
+        let addedItemName: string;
         const existingInventoryItem = inventoryItems.find(
             itemRecord => itemRecord.itemId === extractedItemId && !itemRecord.isEquipped && JSON.stringify(itemRecord.itemNbtData ?? null) === JSON.stringify(resolvedItemData)
         );
 
         if (existingInventoryItem && !resolvedItemData) {
             existingInventoryItem.quantity += itemQuantity;
+            // Rationale: the definition passed by the caller is the reliable display name (stored names can be the item id).
+            addedItemName = typeof itemInput === "string" ? existingInventoryItem.name : itemInput.name;
             consola.success(`Added ${itemQuantity}x ${existingInventoryItem.name} to inventory for ${this.getOwnerName()}.`);
         } else if (typeof itemInput !== "string") {
             inventoryItems.push({
@@ -139,6 +142,7 @@ export class InventoryEntity {
                 isEquipped: false,
                 equipmentSlot: null
             });
+            addedItemName = itemInput.name;
             consola.success(`Added ${itemQuantity}x ${itemInput.name} to inventory for ${this.getOwnerName()}.`);
         } else {
             consola.warn(`Failed to add item ${extractedItemId} to inventory: missing item definition.`);
@@ -147,6 +151,14 @@ export class InventoryEntity {
 
         const saveResult = this.inventoryDatabaseInstance.savePlayerInventory(this.playerIdIdentifier, inventoryItems);
         if (saveResult instanceof Promise) await saveResult;
+
+        await this.playerEntityReference.worldInstance.events.emitAsync("itemAdd", {
+            playerId: this.playerIdIdentifier,
+            player: this.playerEntityReference,
+            itemId: extractedItemId,
+            name: addedItemName,
+            quantity: itemQuantity
+        });
     }
 
     /**
@@ -157,6 +169,7 @@ export class InventoryEntity {
      * @returns True if the item was successfully removed, false otherwise.
      */
     public async remove(itemInput: string | Pick<Item, "itemId">, itemQuantity = 1): Promise<boolean> {
+        this.playerEntityReference.assertCanAct("inventory.remove");
         if (itemQuantity <= 0) {
             return false;
         }
@@ -178,6 +191,12 @@ export class InventoryEntity {
         if (saveResult instanceof Promise) await saveResult;
 
         consola.success(`Removed ${itemQuantity}x ${extractedItemId} from inventory for ${this.getOwnerName()}.`);
+        await this.playerEntityReference.worldInstance.events.emitAsync("itemRemove", {
+            playerId: this.playerIdIdentifier,
+            player: this.playerEntityReference,
+            itemId: extractedItemId,
+            quantity: itemQuantity
+        });
         return true;
     }
 
@@ -189,6 +208,7 @@ export class InventoryEntity {
      * @returns True if the item was successfully equipped, false otherwise.
      */
     public async equip(equipmentSlot: EquipmentSlot, itemId: string): Promise<boolean> {
+        this.playerEntityReference.assertCanAct("inventory.equip");
         const inventoryItems = await this.load();
         const targetInventoryItem = inventoryItems.find(itemRecord => itemRecord.itemId === itemId && !itemRecord.isEquipped);
 
@@ -203,6 +223,7 @@ export class InventoryEntity {
             return false;
         }
 
+        const replacedItemId = inventoryItems.find(itemRecord => itemRecord.isEquipped && itemRecord.equipmentSlot === equipmentSlot)?.itemId;
         this.unequipSlotIfExists(inventoryItems, equipmentSlot);
 
         if (targetInventoryItem.quantity > 1) {
@@ -223,6 +244,12 @@ export class InventoryEntity {
 
         this.playerEntityReference?.updateMaxHealth();
         consola.success(`${this.getOwnerName()} equipped ${targetInventoryItem.name} to ${equipmentSlot}.`);
+
+        const { events } = this.playerEntityReference.worldInstance;
+        if (replacedItemId !== undefined) {
+            await events.emitAsync("itemUnequip", { playerId: this.playerIdIdentifier, player: this.playerEntityReference, itemId: replacedItemId, slot: equipmentSlot });
+        }
+        await events.emitAsync("itemEquip", { playerId: this.playerIdIdentifier, player: this.playerEntityReference, itemId, slot: equipmentSlot });
         return true;
     }
 
@@ -244,6 +271,7 @@ export class InventoryEntity {
      * @returns True if an item was unequipped, false otherwise.
      */
     public async unequip(equipmentSlot: EquipmentSlot): Promise<boolean> {
+        this.playerEntityReference.assertCanAct("inventory.unequip");
         const inventoryItems = await this.load();
         const equippedItemRecord = inventoryItems.find(itemRecord => itemRecord.isEquipped && itemRecord.equipmentSlot === equipmentSlot);
 
@@ -260,6 +288,12 @@ export class InventoryEntity {
 
         this.playerEntityReference?.updateMaxHealth();
         consola.success(`${this.getOwnerName()} unequipped ${equippedItemRecord.name} from ${equipmentSlot}.`);
+        await this.playerEntityReference.worldInstance.events.emitAsync("itemUnequip", {
+            playerId: this.playerIdIdentifier,
+            player: this.playerEntityReference,
+            itemId: equippedItemRecord.itemId,
+            slot: equipmentSlot
+        });
         return true;
     }
 
@@ -312,6 +346,7 @@ export class InventoryEntity {
      * @returns True if the item was used, false otherwise.
      */
     public use(itemInput: string | Pick<Item, "itemId">, itemQuantity = 1): boolean {
+        this.playerEntityReference.assertCanAct("inventory.use");
         if (itemQuantity <= 0) {
             return false;
         }
@@ -342,6 +377,7 @@ export class InventoryEntity {
      * @returns The amount of gold received.
      */
     public async sellItem(itemId: string, itemQuantity = 1): Promise<number> {
+        this.playerEntityReference.assertCanAct("inventory.sell");
         if (itemQuantity <= 0) {
             return 0;
         }
@@ -366,6 +402,13 @@ export class InventoryEntity {
         }
 
         consola.success(`${this.getOwnerName()} sold ${itemQuantity}x ${inventoryItemRecord.name} for ${calculatedGoldAmount} gold.`);
+        await this.playerEntityReference.worldInstance.events.emitAsync("itemSell", {
+            playerId: this.playerIdIdentifier,
+            player: this.playerEntityReference,
+            itemId,
+            quantity: itemQuantity,
+            gold: calculatedGoldAmount
+        });
         return calculatedGoldAmount;
     }
 }
