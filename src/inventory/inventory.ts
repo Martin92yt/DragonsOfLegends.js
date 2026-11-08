@@ -4,6 +4,8 @@ import { consola } from "consola";
 import { EquipmentSlot, ItemCategory, ItemRarity } from "./item.enum.js";
 import PlayerEntity from "../player/player.entity.js";
 import { Item } from "./inventory.interface.js";
+import AsyncQueue from "../utils/async-queue.js";
+import type { LootboxOpenResult } from "../lootbox/lootbox.types.js";
 
 type ItemInput = string | (Item & { data?: ItemNBT | null });
 
@@ -37,6 +39,8 @@ export class InventoryEntity {
         [ItemCategory.Weapons]: 4,
         [ItemCategory.Armor]: 3
     };
+
+    private readonly useQueue = new AsyncQueue();
 
     public readonly playerIdIdentifier: string;
     public playerEntityReference: PlayerEntity;
@@ -120,7 +124,9 @@ export class InventoryEntity {
         }
 
         const inputItemNbtData = typeof itemInput === "string" ? null : itemInput.data ?? null;
-        const resolvedItemData = itemNbtData ?? inputItemNbtData;
+        // Rationale: an item added without explicit data gets the default data of its definition (e.g. the modifiers of an amulet).
+        const defaultItemData = typeof itemInput === "string" ? null : (itemInput.defaultNbt ? { ...itemInput.defaultNbt } : null);
+        const resolvedItemData = itemNbtData ?? inputItemNbtData ?? defaultItemData;
         const inventoryItems = await this.load();
         let addedItemName: string;
         const existingInventoryItem = inventoryItems.find(
@@ -339,21 +345,71 @@ export class InventoryEntity {
     }
 
     /**
-     * Uses an inventory item.
+     * Uses consumable items: one unit is consumed per use, then its behaviour runs (instant heal, temporary effects,
+     * lootbox, see {@link Item.use}). Consumables without behaviour are simply consumed.
+     * Uses are serialized per inventory, so the same item cannot be spent twice by concurrent calls.
      *
      * @param itemInput The item identifier or item reference.
-     * @param itemQuantity The amount to use.
-     * @returns True if the item was used, false otherwise.
+     * @param itemQuantity The number of units to use (a positive integer).
+     * @returns True if the item was used, false if it is not an unequipped consumable the player owns in that quantity.
+     * @throws {PlayerDeadError} If the player is dead (thrown synchronously).
      */
-    public use(itemInput: string | Pick<Item, "itemId">, itemQuantity = 1): boolean {
+    public use(itemInput: string | Pick<Item, "itemId">, itemQuantity = 1): Promise<boolean> {
         this.playerEntityReference.assertCanAct("inventory.use");
-        if (itemQuantity <= 0) {
+        if (!Number.isInteger(itemQuantity) || itemQuantity <= 0) {
+            return Promise.resolve(false);
+        }
+
+        const itemId = typeof itemInput === "string" ? itemInput : itemInput.itemId;
+        return this.useQueue.run(() => this.consume(itemId, itemQuantity));
+    }
+
+    private async consume(itemId: string, quantity: number): Promise<boolean> {
+        const player = this.playerEntityReference;
+        player.assertCanAct("inventory.use"); // re-checked: the player may have died while queued
+
+        const owned = (await this.load())
+            .filter((record) => record.itemId === itemId && !record.isEquipped)
+            .reduce((sum, record) => sum + record.quantity, 0);
+        const record = (await this.load()).find((candidate) => candidate.itemId === itemId && !candidate.isEquipped);
+        if (!record || record.category !== ItemCategory.Consumables || owned < quantity) {
+            return false;
+        }
+        if (!(await this.removeUnequipped(itemId, quantity))) {
             return false;
         }
 
-        const extractedItemId = typeof itemInput === "string" ? itemInput : itemInput.itemId;
-        consola.success(`Used ${itemQuantity}x ${extractedItemId} for ${this.getOwnerName()}.`);
-        return false;
+        const behaviour = player.worldInstance.items.get(itemId)?.use;
+        let healed = 0;
+        const effects: string[] = [];
+        const lootboxes: LootboxOpenResult[] = [];
+        for (let unit = 0; unit < quantity; unit++) {
+            if (behaviour?.heal) healed += player.heal(behaviour.heal, `item:${itemId}`);
+            for (const effectId of behaviour?.effects ?? []) {
+                await player.effects.apply(effectId);
+                effects.push(effectId);
+            }
+            if (behaviour?.lootbox) lootboxes.push(await player.worldInstance.lootboxes.open(player, behaviour.lootbox));
+        }
+
+        consola.success(`Used ${quantity}x ${itemId} for ${this.getOwnerName()}.`);
+        await player.worldInstance.events.emitAsync("itemUse", { playerId: player.id, player, itemId, quantity, healed, effects, lootboxes });
+        return true;
+    }
+
+    /**
+     * Removes a quantity that may span several stacks (the same item with different item data).
+     */
+    private async removeUnequipped(itemId: string, quantity: number): Promise<boolean> {
+        let remaining = quantity;
+        while (remaining > 0) {
+            const stack = (await this.load()).find((record) => record.itemId === itemId && !record.isEquipped);
+            if (!stack) return false;
+            const taken = Math.min(stack.quantity, remaining);
+            if (!(await this.remove(itemId, taken))) return false;
+            remaining -= taken;
+        }
+        return true;
     }
 
     /**

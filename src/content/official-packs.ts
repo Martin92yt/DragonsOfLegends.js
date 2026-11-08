@@ -1,3 +1,4 @@
+import { OFFICIAL_EFFECTS, OFFICIAL_ITEMS, OFFICIAL_LOOTBOXES, OFFICIAL_SHOPS } from "./official-items.js";
 import { OFFICIAL_ENEMIES } from "../enemy/official-enemies.js";
 import { OFFICIAL_JOBS } from "../jobs/official-jobs.js";
 import { createOfficialLocations } from "../location/official-map.js";
@@ -7,6 +8,7 @@ import type { ContentPack } from "./content-pack.js";
 
 /** Identifiers of the official content packs. */
 export const OFFICIAL_PACK_IDS = {
+    items: "dol:items",
     enemies: "dol:enemies",
     classes: "dol:classes",
     jobs: "dol:jobs",
@@ -25,6 +27,14 @@ export const OFFICIAL_PACK_IDS = {
  */
 export function createOfficialPacks(): ContentPack[] {
     return [
+        {
+            id: OFFICIAL_PACK_IDS.items,
+            name: "Official items, effects, lootboxes and shops",
+            effects: OFFICIAL_EFFECTS,
+            items: OFFICIAL_ITEMS,
+            lootboxes: OFFICIAL_LOOTBOXES,
+            shops: OFFICIAL_SHOPS
+        },
         { id: OFFICIAL_PACK_IDS.enemies, name: "Official enemies", enemies: OFFICIAL_ENEMIES },
         { id: OFFICIAL_PACK_IDS.classes, name: "Official classes", classes: OFFICIAL_CLASSES },
         { id: OFFICIAL_PACK_IDS.jobs, name: "Official jobs", jobs: OFFICIAL_JOBS },

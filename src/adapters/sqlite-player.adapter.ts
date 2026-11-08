@@ -14,6 +14,7 @@ import fs from "node:fs";
 import PlayerManager from "../player/player.manager.js";
 import { parseBestiaryState } from "../bestiary/bestiary.types.js";
 import { parsePlayerJobsState } from "../jobs/job.serialization.js";
+import { parsePlayerEffectsState } from "../effects/effect.serialization.js";
 
 export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
     private readonly databaseInstance: Database.Database;
@@ -82,6 +83,7 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 bestiary: playerRecord.bestiary,
                 jobs: playerRecord.jobs,
                 deadUntil: playerRecord.deadUntil,
+                effects: playerRecord.effects,
                 level: statsRecord?.level ?? 1,
                 experience: statsRecord?.experience ?? 0,
                 health: statsRecord?.health ?? 100,
@@ -152,7 +154,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 EquippedTitle TEXT NOT NULL DEFAULT '',
                 Bestiary TEXT NOT NULL DEFAULT '{}',
                 Jobs TEXT NOT NULL DEFAULT '{}',
-                DeadUntil INTEGER NOT NULL DEFAULT 0
+                DeadUntil INTEGER NOT NULL DEFAULT 0,
+                Effects TEXT NOT NULL DEFAULT '{}'
             );
 
             CREATE TABLE IF NOT EXISTS Stats (
@@ -200,7 +203,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
             EquippedTitle: "ALTER TABLE Player ADD COLUMN EquippedTitle TEXT NOT NULL DEFAULT ''",
             Bestiary: "ALTER TABLE Player ADD COLUMN Bestiary TEXT NOT NULL DEFAULT '{}'",
             Jobs: "ALTER TABLE Player ADD COLUMN Jobs TEXT NOT NULL DEFAULT '{}'",
-            DeadUntil: "ALTER TABLE Player ADD COLUMN DeadUntil INTEGER NOT NULL DEFAULT 0"
+            DeadUntil: "ALTER TABLE Player ADD COLUMN DeadUntil INTEGER NOT NULL DEFAULT 0",
+            Effects: "ALTER TABLE Player ADD COLUMN Effects TEXT NOT NULL DEFAULT '{}'"
         };
         this.executeMigrations(existingColumns, migrationQueries);
     }
@@ -249,8 +253,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
     private savePlayer(playerData: PlayerData): void {
         this.databaseInstance
             .prepare(`
-                INSERT INTO Player (Name, Identifier, Class, LocationId, Gold, BankGold, BankUnlocked, Titles, EquippedTitle, Bestiary, Jobs, DeadUntil)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO Player (Name, Identifier, Class, LocationId, Gold, BankGold, BankUnlocked, Titles, EquippedTitle, Bestiary, Jobs, DeadUntil, Effects)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
                     Name = excluded.Name,
@@ -263,7 +267,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                     EquippedTitle = excluded.EquippedTitle,
                     Bestiary = excluded.Bestiary,
                     Jobs = excluded.Jobs,
-                    DeadUntil = excluded.DeadUntil
+                    DeadUntil = excluded.DeadUntil,
+                    Effects = excluded.Effects
             `)
             .run(
                 playerData.name, playerData.id, playerData.classId,
@@ -271,7 +276,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 playerData.bankUnlocked ? 1 : 0,
                 JSON.stringify(playerData.titles ?? []), playerData.equippedTitleId ?? "",
                 JSON.stringify(playerData.bestiary ?? {}), JSON.stringify(playerData.jobs ?? {}),
-                playerData.deadUntil ?? 0 // 0 = alive
+                playerData.deadUntil ?? 0, // 0 = alive
+                JSON.stringify(playerData.effects ?? {})
             );
     }
 
@@ -281,14 +287,14 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 SELECT Name AS name, Identifier AS id, Class AS classId,
                        LocationId AS locationId, Gold AS gold, BankGold AS bankGold,
                        BankUnlocked AS bankUnlocked, Titles AS titles, EquippedTitle AS equippedTitleId,
-                       Bestiary AS bestiary, Jobs AS jobs, DeadUntil AS deadUntil
+                       Bestiary AS bestiary, Jobs AS jobs, DeadUntil AS deadUntil, Effects AS effects
                 FROM Player WHERE Identifier = ?
             `)
-            .get(playerId) as { name: string; id: string; classId: PlayerData["classId"]; locationId: string; gold: number; bankGold: number; bankUnlocked: number; titles: string; equippedTitleId: string; bestiary: string; jobs: string; deadUntil: number } | undefined;
+            .get(playerId) as { name: string; id: string; classId: PlayerData["classId"]; locationId: string; gold: number; bankGold: number; bankUnlocked: number; titles: string; equippedTitleId: string; bestiary: string; jobs: string; deadUntil: number; effects: string } | undefined;
 
         if (!rawRecord) return undefined;
 
-        return { ...rawRecord, bankUnlocked: Boolean(rawRecord.bankUnlocked), titles: SqlitePlayerAdapter.parseTitleIds(rawRecord.titles), bestiary: parseBestiaryState(SqlitePlayerAdapter.parseJson(rawRecord.bestiary)), jobs: parsePlayerJobsState(SqlitePlayerAdapter.parseJson(rawRecord.jobs)), deadUntil: rawRecord.deadUntil > 0 ? rawRecord.deadUntil : null };
+        return { ...rawRecord, bankUnlocked: Boolean(rawRecord.bankUnlocked), titles: SqlitePlayerAdapter.parseTitleIds(rawRecord.titles), bestiary: parseBestiaryState(SqlitePlayerAdapter.parseJson(rawRecord.bestiary)), jobs: parsePlayerJobsState(SqlitePlayerAdapter.parseJson(rawRecord.jobs)), deadUntil: rawRecord.deadUntil > 0 ? rawRecord.deadUntil : null, effects: parsePlayerEffectsState(SqlitePlayerAdapter.parseJson(rawRecord.effects)) };
     }
 
     /**

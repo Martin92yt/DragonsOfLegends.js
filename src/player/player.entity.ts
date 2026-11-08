@@ -12,6 +12,9 @@ import PlayerTitles from "./player.titles.js";
 import PlayerBestiary from "./player.bestiary.js";
 import PlayerJobs from "./player.jobs.js";
 import PlayerLife from "./player.life.js";
+import PlayerEffects from "./player.effects.js";
+import { readAmuletModifiers } from "../inventory/amulet.js";
+import { resolvePlayerModifiers, scaleExperience, type PlayerModifiers } from "./player.modifiers.js";
 import ItemBank from "../economy/item-bank.js";
 import EnemyEntity from "../enemy/enemy.js";
 import type Combat from "../combat/combat.js";
@@ -56,6 +59,8 @@ export default class PlayerEntity {
     public inCombat = false;
     /** Life state: the single source of truth for whether the player can act (see {@link PlayerEntity.assertCanAct}). */
     public readonly life: PlayerLife;
+    /** Temporary effects (potions, buffs, damage or heal over time). */
+    public readonly effects: PlayerEffects;
     
     /**
      * Creates a player entity.
@@ -82,6 +87,8 @@ export default class PlayerEntity {
      * @param equippedTitleId The identifier of the equipped title, or an empty string.
      * @param bestiaryState The saved bestiary state (validated).
      * @param jobsState The saved jobs state (validated).
+     * @param deadUntil The persisted respawn timestamp (ms), or null if the player is alive.
+     * @param effectsState The saved effects state (validated).
      * @returns void
      */
     public constructor(
@@ -107,7 +114,8 @@ export default class PlayerEntity {
         equippedTitleId = "",
         bestiaryState: unknown = {},
         jobsState: unknown = {},
-        deadUntil: number | null = null
+        deadUntil: number | null = null,
+        effectsState: unknown = {}
     ) {
         this.worldInstance = worldInstance;
         this.level = Math.max(1, level);
@@ -142,6 +150,7 @@ export default class PlayerEntity {
         this.bestiary = new PlayerBestiary(bestiaryState, worldInstance.enemies);
         this.jobs = new PlayerJobs(this, jobsState);
         this.life = new PlayerLife(this, deadUntil);
+        this.effects = new PlayerEffects(this, effectsState);
         this.updateMaxHealth();
     }
 
@@ -287,6 +296,18 @@ export default class PlayerEntity {
     }
 
     /**
+     * Adds experience boosted by the amulets and the active effects (see {@link PlayerEntity.getModifiers}).
+     * Use it for gameplay rewards; `addXP` adds the exact amount.
+     *
+     * @param baseAmount The experience before the bonuses.
+     * @returns The experience gain result (`gainedAmount` is the boosted amount).
+     */
+    public async gainXP(baseAmount: number): Promise<GainExperienceResult> {
+        const { xpMultiplier } = await this.getModifiers();
+        return this.addXP(scaleExperience(baseAmount, xpMultiplier));
+    }
+
+    /**
      * Applies damage to the player after calculating equipment and attribute defenses.
      *
      * @param damage The raw incoming damage amount.
@@ -362,6 +383,45 @@ export default class PlayerEntity {
      */
     public isAlive(): boolean {
         return this.health.current > 0;
+    }
+
+    /**
+     * Restores health, capped at the maximum health. A dead player cannot be healed (see `life.revive`).
+     *
+     * @param amount The health points to restore (> 0).
+     * @param source Where the healing comes from (`item:<id>`, `effect:<id>`...), reported by the `playerHeal` event.
+     * @returns The health points actually restored (0 when the amount is invalid, the player is dead or already at full health).
+     */
+    public heal(amount: number, source?: string): number {
+        if (!(amount > 0) || this.isDead) {
+            return 0;
+        }
+
+        const previousHealth = this.health.current;
+        this.health.current = Math.min(this.health.max, previousHealth + amount);
+        const healed = this.health.current - previousHealth;
+        if (healed > 0) {
+            // Fire-and-forget: heal is synchronous, so asynchronous listeners are not awaited.
+            this.worldInstance.events.emit("playerHeal", {
+                playerId: this.id,
+                player: this,
+                amount,
+                healed,
+                health: this.health.current,
+                maxHealth: this.health.max,
+                ...(source !== undefined ? { source } : {})
+            });
+        }
+        return healed;
+    }
+
+    /**
+     * Computes the passive modifiers of the player: worn amulets combined with active effects.
+     *
+     * @returns The experience multiplier, the loot luck and the critical-hit bonus.
+     */
+    public async getModifiers(): Promise<PlayerModifiers> {
+        return resolvePlayerModifiers(readAmuletModifiers(await this.inventory.getItems()), this.effects.getModifiers());
     }
 
     /**

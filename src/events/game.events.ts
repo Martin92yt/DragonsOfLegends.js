@@ -9,6 +9,8 @@ import type { EquipmentSlot } from "../inventory/item.enum.js";
 import type { TitleDefinition } from "../title/title.types.js";
 import type { AchievementDefinition } from "../achievements/achievement.types.js";
 import type { LoadedContentPack } from "../content/content-pack.js";
+import type { EffectDefinition } from "../effects/effect.types.js";
+import type { LootboxOpenResult } from "../lootbox/lootbox.types.js";
 
 /**
  * Convention de nommage des événements : `<sujet><Verbe>` en camelCase (style discord.js).
@@ -118,6 +120,35 @@ export interface GameEvents {
     readonly locationId: string;
   };
 
+  /** Le joueur récupère de la santé (potion, effet de régénération...). `healed` est la valeur réellement rendue (plafonnée à la santé max). */
+  playerHeal: PlayerEventPayload & {
+    readonly amount: number;
+    readonly healed: number;
+    readonly health: number;
+    readonly maxHealth: number;
+    /** Origine du soin (`item:<id>`, `effect:<id>`...), si connue. */
+    readonly source?: string;
+  };
+
+  // ── Effets temporaires ──────────────────────────────────────────────────
+  /** Un effet est appliqué ; `refreshed` vaut true s'il était déjà actif (durée prolongée ou relancée). */
+  effectApply: PlayerEventPayload & {
+    readonly effectId: string;
+    readonly effect: EffectDefinition;
+    readonly expiresAt: number;
+    readonly refreshed: boolean;
+  };
+  /** Un effet s'est terminé par expiration. */
+  effectExpire: PlayerEventPayload & {
+    readonly effectId: string;
+    readonly effect: EffectDefinition;
+  };
+  /** Un effet actif a été retiré avant son terme (`remove`, `clear`). */
+  effectRemove: PlayerEventPayload & {
+    readonly effectId: string;
+    readonly effect: EffectDefinition;
+  };
+
   // ── Voyage ──────────────────────────────────────────────────────────────
   travelStart: PlayerEventPayload & {
     readonly fromId: string;
@@ -190,6 +221,37 @@ export interface GameEvents {
     readonly itemId: string;
     readonly quantity: number;
     readonly gold: number;
+  };
+  /** Un consommable est utilisé (effets déjà appliqués). Les objets de catégorie `consumables` sans `use` sont simplement consommés. */
+  itemUse: PlayerEventPayload & {
+    readonly itemId: string;
+    readonly quantity: number;
+    /** Santé réellement rendue par les soins instantanés. */
+    readonly healed: number;
+    /** Identifiants des effets appliqués. */
+    readonly effects: ReadonlyArray<string>;
+    /** Résultats des poches mystères ouvertes par l'objet. */
+    readonly lootboxes: ReadonlyArray<LootboxOpenResult>;
+  };
+
+  // ── Boutiques et poches mystères ────────────────────────────────────────
+  shopBuy: PlayerEventPayload & {
+    readonly shopId: string;
+    readonly itemId: string;
+    readonly quantity: number;
+    readonly unitPrice: number;
+    readonly totalPrice: number;
+  };
+  shopSell: PlayerEventPayload & {
+    readonly shopId: string;
+    readonly itemId: string;
+    readonly quantity: number;
+    readonly unitPrice: number;
+    readonly totalPrice: number;
+  };
+  /** Une poche mystère est ouverte (récompenses déjà accordées). */
+  lootboxOpen: PlayerEventPayload & {
+    readonly result: LootboxOpenResult;
   };
 
   // ── Banques ─────────────────────────────────────────────────────────────

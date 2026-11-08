@@ -87,10 +87,13 @@ export default class PlayerManager {
       playerData.bestiary,
       playerData.jobs,
       playerData.deadUntil ?? null,
+      playerData.effects,
     );
 
     await playerInstance.inventory.load();
     this.activePlayersMap.set(playerData.id, playerInstance);
+    // Credits the ticks and expirations that elapsed while the player was unloaded.
+    await playerInstance.effects.sync();
     this.refreshUnloadTimer(playerData.id);
     consola.debug(`Player ${playerData.id} loaded into cache.`);
     await this.world.events.emitAsync("playerLoad", {
@@ -225,6 +228,7 @@ export default class PlayerManager {
     // The cached instance is the one listeners and stale references know: keep it for the cleanup and the event.
     const cachedPlayer = this.activePlayersMap.get(playerId);
     cachedPlayer?.life.dispose();
+    cachedPlayer?.effects.dispose();
     this.activePlayersMap.delete(playerId);
     const player = cachedPlayer ?? (await this.get(playerId));
     if (!player) {
@@ -276,6 +280,7 @@ export default class PlayerManager {
     await this.save(playerInstance);
     this.clearUnloadTimer(playerId);
     playerInstance.life.dispose();
+    playerInstance.effects.dispose();
     this.activePlayersMap.delete(playerId);
     await this.world.events.emitAsync("playerUnload", {
       playerId,
@@ -329,6 +334,7 @@ export default class PlayerManager {
       bestiary: playerInstance.bestiary.toState(),
       jobs: playerInstance.jobs.toState(),
       deadUntil: playerInstance.life.getPersistedDeadUntil(),
+      effects: playerInstance.effects.toState(),
     };
 
     const saveResult = this.playerDatabase.save(playerData);

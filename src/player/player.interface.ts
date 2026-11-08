@@ -1,6 +1,7 @@
 import type { PlayerClassId } from "./player.class.js";
 import type { BestiaryState } from "../bestiary/bestiary.types.js";
 import type { PlayerJobsState } from "../jobs/job.types.js";
+import type { PlayerEffectsState } from "../effects/effect.types.js";
 import type { TitleDefinition } from "../title/title.types.js";
 
 /**
@@ -51,6 +52,8 @@ export interface PlayerData {
     jobs?: PlayerJobsState;
     /** Epoch ms at which a dead player respawns, or null/absent when alive. */
     deadUntil?: number | null;
+    /** The active temporary effects (potions, buffs) with their timestamps. */
+    effects?: PlayerEffectsState;
 }
 
 /**
@@ -179,6 +182,8 @@ export interface PlayerRecord {
     jobs: PlayerJobsState;
     /** Epoch ms at which a dead player respawns, or null when alive. */
     deadUntil: number | null;
+    /** The active temporary effects. */
+    effects: PlayerEffectsState;
 }
 
 /**

@@ -1,4 +1,7 @@
 import { consola } from "consola";
+import type EffectRegistry from "../effects/effect.registry.js";
+import type LootboxManager from "../lootbox/lootbox.manager.js";
+import type ShopManager from "../shop/shop.manager.js";
 import type EnemyRegistry from "../enemy/enemy.registry.js";
 import type ItemRegistry from "../inventory/item.registry.js";
 import type JobManager from "../jobs/job.manager.js";
@@ -16,6 +19,9 @@ import type { ContentPack, LoadedContentPack, UseContentPackOptions } from "./co
 export interface ContentTargets {
     readonly items: ItemRegistry;
     readonly enemies: EnemyRegistry;
+    readonly effects: EffectRegistry;
+    readonly lootboxes: LootboxManager;
+    readonly shops: ShopManager;
     readonly classes: PlayerClassRegistry;
     readonly jobs: JobManager;
     readonly titles: TitleManager;
@@ -25,7 +31,7 @@ export interface ContentTargets {
 /**
  * Loads content packs into a world, atomically.
  *
- * A pack is applied in this order: items, enemies, classes, jobs, titles, locations, then its `setup` hook.
+ * A pack is applied in this order: effects, items, lootboxes, shops, enemies, classes, jobs, titles, locations, then its `setup` hook.
  * If anything fails, every registration made by the pack is reverted and the original error is rethrown.
  */
 export default class ContentManager {
@@ -65,7 +71,10 @@ export default class ContentManager {
         const { override = false } = options;
 
         try {
+            this.fill(this.targets.effects, pack.effects, counts, undo, override);
             this.fill(this.targets.items, pack.items, counts, undo, override);
+            this.fill(this.targets.lootboxes, pack.lootboxes, counts, undo, override);
+            this.fill(this.targets.shops, pack.shops, counts, undo, override);
             this.fill(this.targets.enemies, pack.enemies, counts, undo, override);
             this.fill(this.targets.classes, pack.classes, counts, undo, override);
             this.fill(this.targets.jobs, pack.jobs, counts, undo, override);
@@ -136,7 +145,10 @@ export default class ContentManager {
      */
     public lock(): void {
         this.locked = true;
+        this.targets.effects.lock();
         this.targets.items.lock();
+        this.targets.lootboxes.lock();
+        this.targets.shops.lock();
         this.targets.enemies.lock();
         this.targets.classes.lock();
         this.targets.jobs.lock();
@@ -150,7 +162,10 @@ export default class ContentManager {
      */
     public unlock(): void {
         this.locked = false;
+        this.targets.effects.unlock();
         this.targets.items.unlock();
+        this.targets.lootboxes.unlock();
+        this.targets.shops.unlock();
         this.targets.enemies.unlock();
         this.targets.classes.unlock();
         this.targets.jobs.unlock();

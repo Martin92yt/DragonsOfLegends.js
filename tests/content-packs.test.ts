@@ -59,9 +59,10 @@ const startPack = (): ContentPack => ({ id: "test:start", classes: [necromancer]
 const emptyWorld = (options: Parameters<typeof createWorld>[0] = {}) => createWorld({ premadeContent: false, ...options });
 
 describe("Official content is a set of ordinary packs", () => {
-    it("loads the five official packs by default", () => {
+    it("loads the five official packs by default (the items pack is opt-in)", () => {
         const world = createWorld();
-        assert.deepEqual(world.content.list().map((pack) => pack.id).slice(0, 5), Object.values(OFFICIAL_PACK_IDS));
+        const { items: _items, ...defaultPacks } = OFFICIAL_PACK_IDS;
+        assert.deepEqual(world.content.list().map((pack) => pack.id).slice(0, 5), Object.values(defaultPacks));
         assert.equal(world.enemies.size, OFFICIAL_ENEMIES.length);
         assert.equal(world.classes.size, 3);
         assert.equal(world.jobs.size, 3);

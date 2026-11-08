@@ -34,7 +34,8 @@ describe("SqlitePlayerAdapter", () => {
             equippedTitleId: "gilded_purse",
             bestiary: { slime: { kills: 3, firstDefeatedAt: 1000 } },
             jobs: { fishing: { level: 2, xp: 5, equippedToolItemId: "wooden_fishing_rod", lastActionAt: { fish: 123 } } },
-            deadUntil: 1_900_000_000_000
+            deadUntil: 1_900_000_000_000,
+            effects: { regeneration: { appliedAt: 1_000, expiresAt: 61_000, lastTickAt: 5_000 } }
         };
         adapter.save({ ...sample, ...extras });
         assert.deepEqual(adapter.get(sample.id), { ...sample, ...extras });

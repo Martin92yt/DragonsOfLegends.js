@@ -26,6 +26,12 @@ import type {
   EnemyDefinition,
   EnemySpawnRule,
 } from "./enemy/enemy.definition.js";
+import EffectRegistry from "./effects/effect.registry.js";
+import type { EffectDefinition } from "./effects/effect.types.js";
+import LootboxManager from "./lootbox/lootbox.manager.js";
+import type { LootboxDefinition } from "./lootbox/lootbox.types.js";
+import ShopManager from "./shop/shop.manager.js";
+import type { ShopDefinition } from "./shop/shop.types.js";
 import ItemRegistry from "./inventory/item.registry.js";
 import type { Item } from "./inventory/inventory.interface.js";
 import PlayerClassRegistry from "./player/player-class.registry.js";
@@ -58,6 +64,17 @@ export interface WorldInitializationOptions {
   premadeEnemies?: boolean;
   /** Loads the official player classes (enabled by default). */
   premadeClasses?: boolean;
+  /**
+   * Loads the official items (starter equipment, potions, amulets, pouches), effects, lootboxes and shops.
+   * Disabled by default, even with `premadeContent`: it makes the `starterItems` exist in the catalogue, so new players start receiving them.
+   */
+  premadeItems?: boolean;
+  /** Additional or custom temporary effects registered at startup. */
+  customEffects?: readonly EffectDefinition[];
+  /** Additional or custom lootboxes registered at startup. */
+  customLootboxes?: readonly LootboxDefinition[];
+  /** Additional or custom shops registered at startup. */
+  customShops?: readonly ShopDefinition[];
   /** Additional or custom enemy species registered at startup. */
   customEnemies?: readonly EnemyDefinition[];
   /** Additional or custom items registered at startup. */
@@ -126,6 +143,12 @@ export default class World extends EventEmitter {
   public readonly items: ItemRegistry;
   /** Enemy species. */
   public readonly enemies: EnemyRegistry;
+  /** Temporary effects (potions, buffs). */
+  public readonly effects: EffectRegistry;
+  /** Lootboxes (mystery pouches). */
+  public readonly lootboxes: LootboxManager;
+  /** Shops (buy and sell with gold). */
+  public readonly shops: ShopManager;
   /** Player classes. */
   public readonly classes: PlayerClassRegistry;
   /** Loads content packs (official and third-party) into the registries above. */
@@ -150,6 +173,8 @@ export default class World extends EventEmitter {
       premadeTitles: premade,
       premadeJobs: premade,
       premadeEnemies: premade,
+      // Opt-in: registering the official items starts granting the starter items to every new player.
+      premadeItems: false,
       premadeClasses: premade,
       checkUpdates: true,
       deathMode: "cooldown",
@@ -185,6 +210,9 @@ export default class World extends EventEmitter {
     this.titles = new TitleManager();
     this.items = new ItemRegistry();
     this.enemies = new EnemyRegistry();
+    this.effects = new EffectRegistry();
+    this.lootboxes = new LootboxManager(this.items);
+    this.shops = new ShopManager(this.items);
     this.classes = new PlayerClassRegistry();
     this.events = new EventEngine<GameEvents>({ logger: consola });
     this.jobs = new JobManager();
@@ -201,6 +229,9 @@ export default class World extends EventEmitter {
     this.content = new ContentManager(this, {
       items: this.items,
       enemies: this.enemies,
+      effects: this.effects,
+      lootboxes: this.lootboxes,
+      shops: this.shops,
       classes: this.classes,
       jobs: this.jobs,
       titles: this.titles,
@@ -249,6 +280,7 @@ export default class World extends EventEmitter {
     const officialPacks = createOfficialPacks();
     const enabled: Readonly<Record<string, boolean | undefined>> = {
       [OFFICIAL_PACK_IDS.enemies]: options.premadeEnemies,
+      [OFFICIAL_PACK_IDS.items]: options.premadeItems,
       [OFFICIAL_PACK_IDS.classes]: options.premadeClasses,
       [OFFICIAL_PACK_IDS.jobs]: options.premadeJobs,
       [OFFICIAL_PACK_IDS.titles]: options.premadeTitles,
@@ -262,6 +294,9 @@ export default class World extends EventEmitter {
       id: "world:custom",
       name: "World options content",
       ...(options.customItems ? { items: options.customItems } : {}),
+      ...(options.customEffects ? { effects: options.customEffects } : {}),
+      ...(options.customLootboxes ? { lootboxes: options.customLootboxes } : {}),
+      ...(options.customShops ? { shops: options.customShops } : {}),
       ...(options.customEnemies ? { enemies: options.customEnemies } : {}),
       ...(options.customClasses ? { classes: options.customClasses } : {}),
       ...(options.customJobs ? { jobs: options.customJobs } : {}),

@@ -225,15 +225,15 @@ describe("InventoryEntity economy and persistence", () => {
         assert.equal(a.inventory.playerEntityReference, b);
     });
 
-    it("consumes usable items", { todo: "M2 InventoryEntity.use() is a stub that always returns false" }, async () => {
+    it("consumes usable items", async () => {
         const player = await spawn(createWorld());
         await player.inventory.add(makeItem("potion", ItemCategory.Consumables), 2);
         assert.equal(await Promise.resolve(player.inventory.use("potion", 1)), true);
         assert.equal(await totalQuantity(player, "potion"), 1);
     });
 
-    it("grants the configured starter items to new players", { todo: "M2 starterItems is configured but never granted" }, async () => {
-        const player = await spawn(createWorld());
+    it("grants the configured starter items to new players", async () => {
+        const player = await spawn(createWorld({ premadeItems: true }));
         assert.equal(await totalQuantity(player, "health_potion"), 3);
         assert.equal(await totalQuantity(player, "rusty_sword"), 1);
     });

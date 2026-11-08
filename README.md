@@ -38,6 +38,7 @@ Building an RPG means rewriting the same systems again and again. This library g
 | **Combat** | Turn-based fights, critical hits, equipment bonuses and durability, ambushes while travelling |
 | **Inventory** | Stacks, equipment slots, rarity, item data (NBT), selling |
 | **Economy** | Gold bank (with marriage pooling) and item bank with slot capacity |
+| **Consumables** | Potions with temporary effects (regeneration, XP boost), amulets (luck, XP, critical), shops and weighted lootboxes |
 | **Jobs** | Fishing, mining and woodcutting, plus your own jobs: levels, cooldowns, loot tables, tools with luck/yield/XP modifiers |
 | **World** | Locations, travel, boat routes and a validated map graph |
 | **Death** | Three modes: timed lockout (`cooldown`), gold and item loss (`loose`), permadeath (`hardcore`) |
@@ -140,7 +141,7 @@ try {
 
 ### Content packs and registries
 
-Everything playable is registered, never hard-coded. A pack can bring items, enemies, classes, jobs, titles and locations, declare dependencies and run a `setup` hook. If anything is invalid, the whole pack is rolled back.
+Everything playable is registered, never hard-coded. A pack can bring effects, items, lootboxes, shops, enemies, classes, jobs, titles and locations, declare dependencies and run a `setup` hook. If anything is invalid, the whole pack is rolled back.
 
 ```ts
 world.content.use(expansion);          // after startup
@@ -148,6 +149,44 @@ world.items.get("moon_fish");          // typed registries: items, enemies, clas
 ```
 
 The official content (map, enemies, classes, titles, fishing, mining and woodcutting) is loaded by default. Start from scratch with `premadeContent: false`.
+
+### Potions, amulets, shops and lootboxes
+
+These systems are opt-in content: `premadeItems: true` loads the official ones (starter equipment, potions, amulets, pouches and a general store). Without it the catalogue stays empty, so no `starterItems` are granted.
+
+```ts
+const world = new World({ premadeItems: true });
+const player = await world.players.create({ id: "u1", name: "Aria", playerClass: PlayerClass.Warrior });
+
+await player.inventory.use("regeneration_potion");   // +10 HP/s for 60 s (effect "regeneration")
+await player.inventory.use("xp_boost_potion");       // x2 experience for 15 min
+player.effects.getRemainingMs("regeneration");       // time left, exact even without timers
+
+await player.inventory.equip("amulet1", "luck_amulet");
+await player.getModifiers();                          // { xpMultiplier, luckPercent, critRateBonus }
+await player.gainXP(50);                              // boosted by amulets and effects (addXP stays exact)
+
+await world.shops.buy(player, "general_store", "pouch_common", 2);
+await world.shops.sell(player, "general_store", "health_potion", 3);
+await player.inventory.use("pouch_common");           // opens the lootbox "pouch_common"
+world.lootboxes.getDropChances("pouch_rare", 10);     // probabilities (sum to 1) with +10% luck
+```
+
+**Temporary effects.** An `EffectDefinition` has a duration, optional passive `modifiers` (`xpMultiplier`, `luckPercent`, `critRateBonus`), an optional `tick` (heal per interval or custom code) and `onApply` / `onExpire` hooks. State is stored as timestamps: it is exact after a restart and missed ticks are credited when the player is loaded. An active effect is refreshed (or extended with `stacking: "extend"`), never stacked twice. A potion is only an item whose `use.effects` lists effect ids, so a new potion is one effect and one item:
+
+```ts
+world.content.use({
+  id: "my-pack",
+  effects: [{ id: "poison_immunity", name: "Immunity", durationMs: 120_000 }],
+  items: [{ itemId: "antidote", name: "Antidote", category: ItemCategory.Consumables, rarity: ItemRarity.Uncommon, use: { effects: ["poison_immunity"] } }],
+});
+```
+
+**Amulets.** Items of the `amulet` category worn in `amulet1`..`amulet3`. Their item data (`createAmuletNbt`) holds `luckBonus` (%), `experienceBonus` (%) and `critRateBonus` (absolute chance). Luck boosts enemy drop rates and the weight of rare lootbox drops; XP bonuses add up, then multiply with effects.
+
+**Lootboxes.** A `LootboxDefinition` has a rarity tier and a weighted table of gold and item drops (`weight` is relative, not a percentage). Luck only raises the weight of rarer drops, with the same curve as job loot.
+
+**Shops.** A `ShopDefinition` lists items with `price` (buy), `sellPrice` (sell) and `minLevel`. A `sellPrice` above the `price` is rejected (it would print gold). Transactions are serialized per player and equipped items are never sold. New events: `itemUse`, `playerHeal`, `effectApply`, `effectExpire`, `effectRemove`, `shopBuy`, `shopSell`, `lootboxOpen`.
 
 ### Events
 

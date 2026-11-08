@@ -96,3 +96,51 @@ export type {
   PlayerEventPayload,
   GameEventEngine,
 } from "./events/game.events.js";
+
+// ── Effets temporaires, amulettes, boutiques et poches mystères ────────────
+export { default as EffectRegistry } from "./effects/effect.registry.js";
+export { default as PlayerEffects } from "./player/player.effects.js";
+export type {
+  EffectDefinition,
+  EffectModifiers,
+  EffectContext,
+  EffectTick,
+  EffectStacking,
+  ActiveEffectView,
+  ApplyEffectOptions,
+} from "./effects/effect.types.js";
+export type { ItemUse } from "./inventory/inventory.interface.js";
+export {
+  createAmuletNbt,
+  readAmuletModifiers,
+  AMULET_NBT_KEYS,
+  type AmuletModifiers,
+} from "./inventory/amulet.js";
+export {
+  resolvePlayerModifiers,
+  scaleExperience,
+  type PlayerModifiers,
+} from "./player/player.modifiers.js";
+export { default as LootboxManager } from "./lootbox/lootbox.manager.js";
+export { computeDropChances, computeDropWeights, pickDrop } from "./lootbox/lootbox.rules.js";
+export type {
+  LootboxDefinition,
+  LootboxDrop,
+  LootboxGoldDrop,
+  LootboxItemDrop,
+  LootboxOpenResult,
+  LootboxDropChance,
+} from "./lootbox/lootbox.types.js";
+export { default as ShopManager } from "./shop/shop.manager.js";
+export type {
+  ShopDefinition,
+  ShopListing,
+  ShopPurchaseResult,
+  ShopSaleResult,
+} from "./shop/shop.types.js";
+export {
+  OFFICIAL_EFFECTS,
+  OFFICIAL_ITEMS,
+  OFFICIAL_LOOTBOXES,
+  OFFICIAL_SHOPS,
+} from "./content/official-items.js";

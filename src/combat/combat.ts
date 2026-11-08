@@ -51,6 +51,8 @@ export default class Combat {
      * Executes the player's attack action.
      */
     private async executePlayerTurn(): Promise<number> {
+        // Rationale: the loot of an enemy is rolled when it dies, so the luck of the killer must be known before the blow.
+        this.enemyEntity.dropLuckPercent = (await this.playerEntity.getModifiers()).luckPercent;
         const rawPlayerDamageOutput = await this.getPlayerDamage();
         return this.enemyEntity.takeDamage(rawPlayerDamageOutput);
     }
@@ -59,7 +61,8 @@ export default class Combat {
      * Handles rewards and state when the enemy is defeated.
      */
     private async handleEnemyDefeat(inflictedEnemyDamage: number): Promise<CombatResult> {
-        this.playerEntity.addXP(this.enemyEntity.experience);
+        // Amulets and potions boost the experience (the event below reports the experience actually gained).
+        const { gainedAmount: experience } = await this.playerEntity.gainXP(this.enemyEntity.experience);
         this.playerEntity.gold += this.enemyEntity.gold;
         consola.success(`${this.playerEntity.name} defeated ${this.enemyEntity.name}.`);
 
@@ -72,7 +75,7 @@ export default class Combat {
             enemyId: this.enemyEntity.name,
             enemyType: this.enemyEntity.type,
             locationId: this.playerEntity.location,
-            experience: this.enemyEntity.experience,
+            experience,
             gold: this.enemyEntity.gold
         });
 
@@ -131,7 +134,8 @@ export default class Combat {
 
         const totalCriticalRate = Math.min(
             Combat.MAX_CRIT_RATE,
-            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus
+            // Rationale: worn amulets are already counted in the item bonuses; only the temporary effects are added here.
+            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus + this.playerEntity.effects.getModifiers().critRateBonus
         );
 
         if (Math.random() < totalCriticalRate) {

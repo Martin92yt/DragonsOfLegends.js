@@ -749,3 +749,106 @@ export class InvalidDeathRespawnError extends Error {
         this.name = "InvalidDeathRespawnError";
     }
 }
+
+/**
+ * Base class of the errors raised by the shops.
+ */
+export class ShopError extends Error {
+    /**
+     * Creates a shop error.
+     *
+     * @param message The error message.
+     * @returns void
+     */
+    public constructor(message: string) {
+        super(message);
+        this.name = new.target.name;
+    }
+}
+
+/**
+ * The shop does not sell (or does not buy) the requested item.
+ */
+export class ShopItemUnavailableError extends ShopError {
+    /**
+     * Creates the error.
+     *
+     * @param shopId The shop identifier.
+     * @param itemId The item identifier.
+     * @param operation `buy` when the player wants to buy the item, `sell` when the player wants to sell it.
+     * @returns void
+     */
+    public constructor(public readonly shopId: string, public readonly itemId: string, public readonly operation: "buy" | "sell") {
+        super(
+            operation === "buy"
+                ? `Shop "${shopId}" does not sell "${itemId}".`
+                : `Shop "${shopId}" does not buy "${itemId}".`
+        );
+    }
+}
+
+/**
+ * The player level is too low to buy an item.
+ */
+export class ShopLevelTooLowError extends ShopError {
+    /**
+     * Creates the error.
+     *
+     * @param shopId The shop identifier.
+     * @param itemId The item identifier.
+     * @param requiredLevel The level required by the listing.
+     * @param currentLevel The level of the player.
+     * @returns void
+     */
+    public constructor(public readonly shopId: string, public readonly itemId: string, public readonly requiredLevel: number, public readonly currentLevel: number) {
+        super(`"${itemId}" requires level ${requiredLevel} in shop "${shopId}" (current: ${currentLevel}).`);
+    }
+}
+
+/**
+ * The player does not carry enough gold for a purchase.
+ */
+export class ShopInsufficientGoldError extends ShopError {
+    /**
+     * Creates the error.
+     *
+     * @param required The gold required.
+     * @param available The gold carried by the player.
+     * @returns void
+     */
+    public constructor(public readonly required: number, public readonly available: number) {
+        super(`Not enough gold: ${required} required, ${available} available.`);
+    }
+}
+
+/**
+ * The player does not own enough items to sell.
+ */
+export class ShopInsufficientItemsError extends ShopError {
+    /**
+     * Creates the error.
+     *
+     * @param itemId The item identifier.
+     * @param requested The requested quantity.
+     * @param available The quantity the player owns (unequipped).
+     * @returns void
+     */
+    public constructor(public readonly itemId: string, public readonly requested: number, public readonly available: number) {
+        super(`Not enough "${itemId}" to sell: ${requested} requested, ${available} available.`);
+    }
+}
+
+/**
+ * A shop quantity is not a positive integer.
+ */
+export class InvalidShopQuantityError extends ShopError {
+    /**
+     * Creates the error.
+     *
+     * @param quantity The rejected quantity.
+     * @returns void
+     */
+    public constructor(public readonly quantity: number) {
+        super(`Invalid quantity: ${String(quantity)}. Expected a positive integer.`);
+    }
+}

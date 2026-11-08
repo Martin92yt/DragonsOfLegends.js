@@ -1,7 +1,7 @@
 import { InvalidRegistryEntryError } from "../types/error.js";
 import Registry from "../registry/registry.js";
 import { ItemCategory, ItemRarity } from "./item.enum.js";
-import type { Item } from "./inventory.interface.js";
+import type { Item, ItemUse } from "./inventory.interface.js";
 
 const CATEGORIES: ReadonlySet<string> = new Set(Object.values(ItemCategory));
 const RARITIES: ReadonlySet<string> = new Set(Object.values(ItemRarity));
@@ -45,5 +45,17 @@ export default class ItemRegistry extends Registry<Item> {
         if (!CATEGORIES.has(item.category)) fail(`unknown category "${String(item.category)}".`);
         if (!RARITIES.has(item.rarity)) fail(`unknown rarity "${String(item.rarity)}".`);
         if (item.maxStack !== undefined && (!Number.isInteger(item.maxStack) || item.maxStack < 1)) fail("maxStack must be a positive integer.");
+        if (item.defaultNbt !== undefined && (typeof item.defaultNbt !== "object" || item.defaultNbt === null || Array.isArray(item.defaultNbt))) fail("defaultNbt must be an object.");
+        if (item.use !== undefined) ItemRegistry.validateUse(item.use, fail);
+    }
+
+    private static validateUse(use: ItemUse, fail: (reason: string) => never): void {
+        const { heal, effects, lootbox } = use;
+        if (heal === undefined && effects === undefined && lootbox === undefined) fail("use must define heal, effects or lootbox.");
+        if (heal !== undefined && !(Number.isFinite(heal) && heal > 0)) fail("use.heal must be a positive number.");
+        if (effects !== undefined && (!Array.isArray(effects) || effects.length === 0 || effects.some((effectId) => typeof effectId !== "string" || effectId.trim() === ""))) {
+            fail("use.effects must be a non-empty list of effect identifiers.");
+        }
+        if (lootbox !== undefined && (typeof lootbox !== "string" || lootbox.trim() === "")) fail("use.lootbox must be a lootbox identifier.");
     }
 }
