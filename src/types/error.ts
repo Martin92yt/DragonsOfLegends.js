@@ -263,6 +263,22 @@ export class BankError extends Error {
     }
 }
 
+/**
+ * Thrown when a deposit would exceed the gold ceiling of the bank.
+ */
+export class BankLimitReachedError extends BankError {
+    /**
+     * Creates an error indicating that the bank gold ceiling is reached.
+     *
+     * @param limit The maximum gold the bank may hold for the player (or the couple).
+     * @returns void
+     */
+    public constructor(public readonly limit: number) {
+        super(`Bank gold limit reached (Maximum allowed: ${limit}).`);
+        this.name = "BankLimitReachedError";
+    }
+}
+
 export class BankLockedError extends BankError {
     /**
      * Creates an error indicating that the bank account is locked.
@@ -850,5 +866,37 @@ export class InvalidShopQuantityError extends ShopError {
      */
     public constructor(public readonly quantity: number) {
         super(`Invalid quantity: ${String(quantity)}. Expected a positive integer.`);
+    }
+}
+
+/**
+ * Thrown when a player tries to marry an invalid partner (e.g. themselves).
+ */
+export class InvalidPartnerError extends Error {
+    /**
+     * Creates an error indicating that the partner is not valid.
+     *
+     * @param partnerId The rejected partner identifier.
+     * @returns void
+     */
+    public constructor(public readonly partnerId: string) {
+        super(`Player "${partnerId}" cannot marry themselves.`);
+        this.name = "InvalidPartnerError";
+    }
+}
+
+/**
+ * Thrown when a player tries to travel to a location that is not part of the world map.
+ */
+export class UnknownLocationError extends Error {
+    /**
+     * Creates an error indicating that a location does not exist.
+     *
+     * @param locationId The unknown location identifier.
+     * @returns void
+     */
+    public constructor(public readonly locationId: string) {
+        super(`Unknown location "${locationId}".`);
+        this.name = "UnknownLocationError";
     }
 }

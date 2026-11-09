@@ -1,3 +1,4 @@
+import { OFFICIAL_ACHIEVEMENTS } from "../achievements/official-achievements.js";
 import { OFFICIAL_EFFECTS, OFFICIAL_ITEMS, OFFICIAL_LOOTBOXES, OFFICIAL_SHOPS } from "./official-items.js";
 import { OFFICIAL_ENEMIES } from "../enemy/official-enemies.js";
 import { OFFICIAL_JOBS } from "../jobs/official-jobs.js";
@@ -13,7 +14,8 @@ export const OFFICIAL_PACK_IDS = {
     classes: "dol:classes",
     jobs: "dol:jobs",
     titles: "dol:titles",
-    map: "dol:map"
+    map: "dol:map",
+    achievements: "dol:achievements"
 } as const;
 
 /**
@@ -39,6 +41,12 @@ export function createOfficialPacks(): ContentPack[] {
         { id: OFFICIAL_PACK_IDS.classes, name: "Official classes", classes: OFFICIAL_CLASSES },
         { id: OFFICIAL_PACK_IDS.jobs, name: "Official jobs", jobs: OFFICIAL_JOBS },
         { id: OFFICIAL_PACK_IDS.titles, name: "Official titles", titles: OFFICIAL_TITLES },
-        { id: OFFICIAL_PACK_IDS.map, name: "Official map", locations: createOfficialLocations() }
+        { id: OFFICIAL_PACK_IDS.map, name: "Official map", locations: createOfficialLocations() },
+        {
+            id: OFFICIAL_PACK_IDS.achievements,
+            name: "Official achievements",
+            dependsOn: [OFFICIAL_PACK_IDS.titles, OFFICIAL_PACK_IDS.items],
+            achievements: OFFICIAL_ACHIEVEMENTS
+        }
     ];
 }

@@ -93,3 +93,18 @@ export interface EquipmentRecord {
     amuletTwoItemId: string | null;
     amuletThreeItemId: string | null;
 }
+
+/**
+ * Field of {@link EquipmentRecord} that holds the item worn in each equipment slot.
+ */
+export const EQUIPMENT_RECORD_KEYS: Readonly<Record<EquipmentSlot, Exclude<keyof EquipmentRecord, "playerId">>> = {
+    helmet: "helmetItemId",
+    chest: "chestItemId",
+    leggings: "leggingsItemId",
+    boots: "bootsItemId",
+    sword: "swordItemId",
+    shield: "shieldItemId",
+    amulet1: "amuletOneItemId",
+    amulet2: "amuletTwoItemId",
+    amulet3: "amuletThreeItemId"
+};

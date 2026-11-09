@@ -1,11 +1,12 @@
 import Database from "better-sqlite3";
 import PlayerEntity from "./player.entity.js";
 import consola from "consola";
+import { InvalidPartnerError } from "../types/error.js";
 
 export default class PlayerMarriage {
     private partnerId: string;
     private readonly player: PlayerEntity;
-    private readonly dbPath: string;
+    private readonly dbPathOverride: string | undefined;
 
     /**
      * Creates a player marriage manager.
@@ -15,10 +16,10 @@ export default class PlayerMarriage {
      * @param databasePath The path to the SQLite database.
      * @returns void
      */
-    public constructor(player: PlayerEntity, initialPartnerId?: string, databasePath = "./data/player.db") {
+    public constructor(player: PlayerEntity, initialPartnerId?: string, databasePath?: string) {
         this.player = player;
         this.partnerId = initialPartnerId && initialPartnerId !== "/" ? initialPartnerId : "";
-        this.dbPath = databasePath;
+        this.dbPathOverride = databasePath;
     }
 
     /**
@@ -28,7 +29,8 @@ export default class PlayerMarriage {
      * @returns The result of the database operation.
      */
     private withDatabase<T>(operation: (db: Database.Database) => T): T {
-        const database = new Database(this.dbPath);
+        // Rationale: the marriages live in the world database, next to the players (not in a hard-coded ./data/player.db).
+        const database = new Database(this.dbPathOverride ?? this.player.worldInstance.initializationOptions.database?.path ?? "data.db");
         try {
             return operation(database);
         } finally {
@@ -42,8 +44,26 @@ export default class PlayerMarriage {
      * @param database The active database instance.
      * @returns void
      */
-    private removeExistingMarriage(database: Database.Database): void {
-        database.prepare("DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?").run(this.player.id, this.player.id);
+    private removeExistingMarriage(database: Database.Database, playerId: string = this.player.id): void {
+        database.prepare("DELETE FROM Marriage WHERE Player1 = ? OR Player2 = ?").run(playerId, playerId);
+    }
+
+    /**
+     * Updates the in-memory partner when the marriage was changed from the other side (no database write).
+     *
+     * @param partnerId The new partner identifier, or an empty string.
+     * @returns void
+     */
+    public syncPartner(partnerId: string): void {
+        this.partnerId = partnerId;
+    }
+
+    /**
+     * Updates the cached marriage of a player that is currently loaded (nothing to do if it is not).
+     */
+    private syncCachedPlayer(playerId: string, partnerId: string): void {
+        if (playerId === "") return;
+        this.player.worldInstance.players.peek(playerId)?.marriage.syncPartner(partnerId);
     }
 
     /**
@@ -54,10 +74,17 @@ export default class PlayerMarriage {
      */
     public setPartner(newPartnerId: string): this {
         this.player.assertCanAct("marriage.setPartner");
+        if (newPartnerId === this.player.id) {
+            throw new InvalidPartnerError(newPartnerId);
+        }
         try {
+            const previousPartnerId = this.partnerId;
+            // The new partner may have been married too: their former partner is freed as well.
+            const partnerFormerPartnerId = this.player.worldInstance.players.peek(newPartnerId)?.marriage.getPartnerId() ?? "";
             this.withDatabase(db => {
                 const setMarriageTransaction = db.transaction(() => {
                     this.removeExistingMarriage(db);
+                    this.removeExistingMarriage(db, newPartnerId);
                     db.prepare("INSERT INTO Marriage (Player1, Player2, DateStart) VALUES (?, ?, ?)").run(
                         this.player.id,
                         newPartnerId,
@@ -68,6 +95,10 @@ export default class PlayerMarriage {
             });
 
             this.partnerId = newPartnerId;
+            for (const freedPlayerId of [previousPartnerId, partnerFormerPartnerId]) {
+                if (freedPlayerId !== newPartnerId && freedPlayerId !== this.player.id) this.syncCachedPlayer(freedPlayerId, "");
+            }
+            this.syncCachedPlayer(newPartnerId, this.player.id);
             consola.success(`Player ${this.player.id} married ${newPartnerId}.`);
             // Fire-and-forget: setPartner is synchronous, so asynchronous listeners are not awaited.
             this.player.worldInstance.events.emit("marriageStart", { playerId: this.player.id, player: this.player, partnerId: newPartnerId });
@@ -92,6 +123,7 @@ export default class PlayerMarriage {
 
             const formerPartnerId = this.partnerId;
             this.partnerId = "";
+            this.syncCachedPlayer(formerPartnerId, "");
             consola.info(`Player ${this.player.id} divorced.`);
             this.player.worldInstance.events.emit("marriageDivorce", { playerId: this.player.id, player: this.player, formerPartnerId });
         } catch (error) {

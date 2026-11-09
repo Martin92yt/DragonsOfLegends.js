@@ -149,7 +149,7 @@ describe("Player death modes", () => {
         assert.equal(world.players.count().total, 0);
     });
 
-    it("hardcore: the deleted player can no longer be found", { todo: "C6 the deleted player stays in the cache" }, async () => {
+    it("hardcore: the deleted player can no longer be found", async () => {
         const world = createWorld({ deathMode: "hardcore" });
         const player = await spawn(world);
         await player.takeDamage(99999);

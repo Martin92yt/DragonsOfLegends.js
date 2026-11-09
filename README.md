@@ -188,6 +188,29 @@ world.content.use({
 
 **Shops.** A `ShopDefinition` lists items with `price` (buy), `sellPrice` (sell) and `minLevel`. A `sellPrice` above the `price` is rejected (it would print gold). Transactions are serialized per player and equipped items are never sold. New events: `itemUse`, `playerHeal`, `effectApply`, `effectExpire`, `effectRemove`, `shopBuy`, `shopSell`, `lootboxOpen`.
 
+### Official pack, achievements and titles
+
+One call loads the whole official content (map, classes, 21 enemies from the slime to the Ancient Dragon, jobs, items, potions, amulets, lootboxes, a shop, 25 achievements and 22 titles), and you keep adding your own on top:
+
+```ts
+const world = new World({ officialPack: true });   // at startup...
+world.loadOfficialPack();                           // ...or later, on an existing world (packs already loaded are skipped)
+
+world.content.use(myPack);                          // custom content on top
+world.content.use(tweakPack, { override: true });   // replace an official entry
+```
+
+Without `officialPack`, the items and achievements packs stay opt-in (`premadeItems`, `premadeAchievements`), because loading the items starts granting the `starterItems` to new players.
+
+**Achievements** are driven by the game events (`enemyDefeat`, `lootboxOpen`, `playerLevelUp`, `shopBuy`...). Each one has criteria (`target`, optional `filter` and `mode: "max"`) and rewards (`gold`, `experience`, `item`, `title`), paid automatically to the player. Progress and unlocks are saved with the player; a reward that fails is kept pending and retried without paying the earlier rewards twice (`claimPendingRewards`). Packs can bring theirs with `achievements: [...]`.
+
+```ts
+world.achievements.isUnlocked(player.id, "first_blood");
+world.achievements.getProgress(player.id, "slime_slayer");
+```
+
+**Titles** are equipable (`player.titles.equip(id)`) and ordered by rarity, from `common` (*Novice Adventurer*, *First Blood*) to `legendary` (*Legend of the Realm*, *Eternal Champion*); every official title is earned by an achievement, from the first monster to a thousand kills or level 50.
+
 ### Events
 
 Event names follow one convention: `<subject><Verb>` in camelCase. They are emitted **after** the action succeeds, and each payload carries the entities involved.

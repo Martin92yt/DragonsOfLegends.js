@@ -1,6 +1,7 @@
 import type { PlayerClassId } from "./player.class.js";
 import type { BestiaryState } from "../bestiary/bestiary.types.js";
 import type { PlayerJobsState } from "../jobs/job.types.js";
+import type { PlayerAchievementState } from "../achievements/achievement.types.js";
 import type { PlayerEffectsState } from "../effects/effect.types.js";
 import type { TitleDefinition } from "../title/title.types.js";
 
@@ -54,6 +55,8 @@ export interface PlayerData {
     deadUntil?: number | null;
     /** The active temporary effects (potions, buffs) with their timestamps. */
     effects?: PlayerEffectsState;
+    /** The achievements progress and unlocks of the player, by achievement identifier. */
+    achievements?: Record<string, PlayerAchievementState>;
 }
 
 /**
@@ -184,6 +187,8 @@ export interface PlayerRecord {
     deadUntil: number | null;
     /** The active temporary effects. */
     effects: PlayerEffectsState;
+    /** The achievements progress and unlocks. */
+    achievements: Record<string, PlayerAchievementState>;
 }
 
 /**

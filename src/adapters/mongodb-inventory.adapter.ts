@@ -1,7 +1,7 @@
 import { consola } from "consola";
 import { MongoClient, Collection, Db } from "mongodb";
 import { InventoryEntity } from "../inventory/inventory.js";
-import { EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
+import { EQUIPMENT_RECORD_KEYS, EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
 import { EquipmentSlot, ItemCategory, ItemRarity, VALID_EQUIPMENT_SLOTS } from "../inventory/item.enum.js";
 
 interface MongoInventoryDocument {
@@ -17,8 +17,6 @@ interface MongoInventoryDocument {
     isEquipped: boolean;
     equipmentSlot: string | null;
 }
-
-type EquipmentKey = Exclude<keyof EquipmentRecord, "playerId">;
 
 export default class MongoInventoryAdapter {
     private client!: MongoClient;
@@ -148,7 +146,7 @@ export default class MongoInventoryAdapter {
 
             for (const doc of equippedDocuments) {
                 if (doc.equipmentSlot && MongoInventoryAdapter.VALID_SLOTS.has(doc.equipmentSlot)) {
-                    playerEquipmentRecord[doc.equipmentSlot as EquipmentKey] = doc.itemId;
+                    playerEquipmentRecord[EQUIPMENT_RECORD_KEYS[doc.equipmentSlot as EquipmentSlot]] = doc.itemId;
                 }
             }
         } catch (error) {

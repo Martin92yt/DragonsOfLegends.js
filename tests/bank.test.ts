@@ -88,7 +88,7 @@ describe("Bank", () => {
         assert.equal((await world.bank.deposit(player, 10_000_000)).balance, 10_000_000);
     });
 
-    it("supports an unlimited ceiling (-1) for married players", { todo: "C11 the doubled -1 sentinel becomes -2 and every deposit is rejected" }, async () => {
+    it("supports an unlimited ceiling (-1) for married players", async () => {
         const world = createWorld({ bankMaxGoldLimit: -1 });
         const [a, b] = [await spawn(world), await spawn(world)];
         a.bankUnlocked = true;
@@ -96,7 +96,7 @@ describe("Bank", () => {
         await assert.doesNotReject(world.bank.deposit(a, 10));
     });
 
-    it("signals a reached ceiling with a bank error", { todo: "C2 deposit() throws a bare Error instead of a BankError subclass" }, async () => {
+    it("signals a reached ceiling with a bank error", async () => {
         const world = createWorld({ bankMaxGoldLimit: 10 });
         const player = await spawn(world);
         player.bankUnlocked = true;
@@ -141,7 +141,7 @@ describe("Bank", () => {
         assert.equal(await world.bank.getBalanceTotal(player), 25);
     });
 
-    it("never duplicates gold on concurrent withdrawals", { todo: "C2 withdraw() checks the balance, awaits, then mutates (TOCTOU)" }, async () => {
+    it("never duplicates gold on concurrent withdrawals", async () => {
         const world = createWorld();
         const player = await spawn(world);
         player.gold = 500;

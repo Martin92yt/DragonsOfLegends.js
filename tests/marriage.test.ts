@@ -48,20 +48,20 @@ describe("PlayerMarriage", () => {
         assert.equal(defined(await world.players.get(a.id)).marriage.getPartnerId(), "");
     });
 
-    it("works with the default database path", { todo: "C7 default path ./data/player.db differs from the world database" }, async () => {
+    it("works with the default database path", async () => {
         const world = createWorld();
         const [a, b] = [await spawn(world), await spawn(world)];
         assert.doesNotThrow(() => a.marriage.setPartner(b.id));
     });
 
-    it("refuses to marry oneself", { todo: "C7 no guard against self-marriage" }, async () => {
+    it("refuses to marry oneself", async () => {
         const world = createWorld();
         const a = await spawn(world);
         a.marriage = new PlayerMarriage(a, undefined, databasePathOf(world));
         assert.throws(() => a.marriage.setPartner(a.id));
     });
 
-    it("updates the partner's cached marriage as well", { todo: "C7 marriage is one-sided in memory" }, async () => {
+    it("updates the partner's cached marriage as well", async () => {
         const world = createWorld();
         const [a, b] = [await spawn(world), await spawn(world)];
         a.marriage = new PlayerMarriage(a, undefined, databasePathOf(world));

@@ -43,7 +43,7 @@ describe("Public API surface", () => {
         }
     });
 
-    it("exposes the default export used by the README quick start", { todo: "M6 README uses `import World from`, index.ts only has named exports" }, () => {
+    it("exposes the default export used by the README quick start", () => {
         assert.ok("default" in publicApi);
     });
 });

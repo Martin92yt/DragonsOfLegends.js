@@ -65,6 +65,7 @@ export default class Combat {
         const { gainedAmount: experience } = await this.playerEntity.gainXP(this.enemyEntity.experience);
         this.playerEntity.gold += this.enemyEntity.gold;
         consola.success(`${this.playerEntity.name} defeated ${this.enemyEntity.name}.`);
+        await this.collectLoot();
 
         // Listeners (bestiary, achievements...) are awaited so their effects are visible when the result is returned.
         await this.playerEntity.worldInstance.events.emitAsync("enemyDefeat", {
@@ -72,8 +73,10 @@ export default class Combat {
             player: this.playerEntity,
             combat: this,
             enemy: this.enemyEntity,
-            enemyId: this.enemyEntity.name,
+            // Rationale: the identifier of the species (registry id), not the display name ("★ Goblin (Elite)").
+            enemyId: this.enemyEntity.type,
             enemyType: this.enemyEntity.type,
+            tier: this.enemyEntity.tier,
             locationId: this.playerEntity.location,
             experience,
             gold: this.enemyEntity.gold
@@ -87,6 +90,20 @@ export default class Combat {
             defeat: false,
             enemy: this.enemyEntity
         };
+    }
+
+    /**
+     * Hands the loot rolled on the enemy over to the winner.
+     * A failure on one item is logged and never cancels the victory.
+     */
+    private async collectLoot(): Promise<void> {
+        for (const drop of this.enemyEntity.droppedLootList) {
+            try {
+                await this.playerEntity.inventory.add(drop.loot, drop.quantity);
+            } catch (error) {
+                consola.error(`Failed to give ${drop.quantity}x ${drop.loot.itemId} to ${this.playerEntity.name}.`, error);
+            }
+        }
     }
 
     /**
@@ -155,6 +172,12 @@ export default class Combat {
 
         for (const inventoryItemRecord of inventoryItemRecords) {
             if (!inventoryItemRecord.isEquipped || !inventoryItemRecord.itemNbtData) {
+                continue;
+            }
+
+            // Rationale: a broken item (durability 0) gives no bonus anymore.
+            const { durability } = inventoryItemRecord.itemNbtData;
+            if (typeof durability === "number" && durability <= 0) {
                 continue;
             }
 

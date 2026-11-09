@@ -39,7 +39,9 @@ export default class EnemyEntity {
         public readonly defense: number,
         public readonly experience: number,
         public readonly gold: number,
-        private readonly lootTable: readonly LootItem[] = []
+        private readonly lootTable: readonly LootItem[] = [],
+        /** Difficulty tier of the species (`beginner`, `boss`...), when known. */
+        public readonly tier?: string
     ) {}
 
     public takeDamage(incomingDamage: number): number {

@@ -1,4 +1,5 @@
 import { consola } from "consola";
+import type { AchievementManager } from "../achievements/achievement.manager.js";
 import type EffectRegistry from "../effects/effect.registry.js";
 import type LootboxManager from "../lootbox/lootbox.manager.js";
 import type ShopManager from "../shop/shop.manager.js";
@@ -25,13 +26,14 @@ export interface ContentTargets {
     readonly classes: PlayerClassRegistry;
     readonly jobs: JobManager;
     readonly titles: TitleManager;
+    readonly achievements: AchievementManager;
     readonly location: LocationManager;
 }
 
 /**
  * Loads content packs into a world, atomically.
  *
- * A pack is applied in this order: effects, items, lootboxes, shops, enemies, classes, jobs, titles, locations, then its `setup` hook.
+ * A pack is applied in this order: effects, items, lootboxes, shops, enemies, classes, jobs, titles, achievements, locations, then its `setup` hook.
  * If anything fails, every registration made by the pack is reverted and the original error is rethrown.
  */
 export default class ContentManager {
@@ -79,6 +81,7 @@ export default class ContentManager {
             this.fill(this.targets.classes, pack.classes, counts, undo, override);
             this.fill(this.targets.jobs, pack.jobs, counts, undo, override);
             this.fill(this.targets.titles, pack.titles, counts, undo, override);
+            this.fillAchievements(pack.achievements, counts, undo, override);
 
             if ((pack.locations?.length ?? 0) > 0 || (pack.links?.length ?? 0) > 0) {
                 undo.push(this.targets.location.snapshot());
@@ -170,6 +173,31 @@ export default class ContentManager {
         this.targets.classes.unlock();
         this.targets.jobs.unlock();
         this.targets.titles.unlock();
+    }
+
+    /**
+     * Registers the achievements of a pack. The achievement manager is not a {@link Registry}, so the rollback
+     * is handled here: new achievements are unregistered and replaced ones are restored.
+     */
+    private fillAchievements(
+        definitions: ContentPack["achievements"],
+        counts: Record<string, number>,
+        undo: Array<() => void>,
+        override: boolean
+    ): void {
+        if (!definitions || definitions.length === 0) return;
+
+        const { achievements } = this.targets;
+        for (const definition of definitions) {
+            const previous = achievements.has(definition.id) ? achievements.get(definition.id) : undefined;
+            if (previous && override) {
+                achievements.unregister(definition.id);
+                undo.push(() => achievements.register(previous));
+            }
+            achievements.register(definition); // throws DuplicateAchievementError without override
+            undo.push(() => achievements.unregister(definition.id));
+        }
+        counts["achievement"] = definitions.length;
     }
 
     private fill<TDefinition extends object>(

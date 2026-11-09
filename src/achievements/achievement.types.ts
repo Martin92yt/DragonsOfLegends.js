@@ -67,6 +67,12 @@ export interface PlayerAchievementState {
   unlockedAt: number | null;
   /** `false` tant que les récompenses n'ont pas toutes été appliquées. */
   rewardsGranted: boolean;
+  /**
+   * Nombre de récompenses déjà appliquées (dans l'ordre de la définition).
+   * Une relance (`claimPendingRewards`) reprend après la dernière réussie au lieu de rejouer les précédentes.
+   * @defaultValue 0
+   */
+  rewardsApplied?: number;
 }
 
 /** Vue lecture seule de la progression, prête pour l'affichage. */

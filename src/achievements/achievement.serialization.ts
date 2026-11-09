@@ -12,7 +12,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseState(raw: unknown, path: string): PlayerAchievementState {
     if (!isRecord(raw)) throw new AchievementSerializationError(`${path}: expected an object.`);
-    const { progress, unlockedAt, rewardsGranted } = raw;
+    const { progress, unlockedAt, rewardsGranted, rewardsApplied } = raw;
     if (!isRecord(progress)) throw new AchievementSerializationError(`${path}.progress: expected an object.`);
 
     const cleanProgress: Record<string, number> = {};
@@ -28,7 +28,11 @@ function parseState(raw: unknown, path: string): PlayerAchievementState {
     if (typeof rewardsGranted !== "boolean") {
         throw new AchievementSerializationError(`${path}.rewardsGranted: expected a boolean.`);
     }
-    return { progress: cleanProgress, unlockedAt, rewardsGranted };
+    // Rationale: optional so snapshots saved before this field existed still load.
+    if (rewardsApplied !== undefined && (!Number.isInteger(rewardsApplied) || (rewardsApplied as number) < 0)) {
+        throw new AchievementSerializationError(`${path}.rewardsApplied: expected a non-negative integer.`);
+    }
+    return rewardsApplied === undefined ? { progress: cleanProgress, unlockedAt, rewardsGranted } : { progress: cleanProgress, unlockedAt, rewardsGranted, rewardsApplied: rewardsApplied as number };
 }
 
 /**

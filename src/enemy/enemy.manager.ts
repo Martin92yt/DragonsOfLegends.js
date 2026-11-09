@@ -84,7 +84,8 @@ export default class EnemyManager {
             scaledDefense,
             scaledExperienceReward,
             scaledGoldReward,
-            definition.loot ?? []
+            definition.loot ?? [],
+            definition.tier
         );
     }
 

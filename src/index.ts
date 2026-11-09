@@ -5,6 +5,7 @@
  */
 
 // ── Core ────────────────────────────────────────────────────────────────────
+export { default } from "./world.js";
 export {
   default as World,
   type WorldInitializationOptions as WorldOptions,
@@ -144,3 +145,63 @@ export {
   OFFICIAL_LOOTBOXES,
   OFFICIAL_SHOPS,
 } from "./content/official-items.js";
+
+// ── API complète documentée : erreurs, règles, contenu officiel ─────────────
+export * from "./types/error.js";
+export {
+  EventEngineError,
+  EventListenerError,
+  EventTimeoutError,
+  EventAbortedError,
+} from "./events/event.engine.js";
+export { LEGACY_EVENT_NAMES } from "./events/game.events.js";
+export {
+  AchievementError,
+  InvalidAchievementError,
+  DuplicateAchievementError,
+  UnknownAchievementError,
+  AchievementSerializationError,
+  ACHIEVEMENT_SNAPSHOT_VERSION,
+} from "./achievements/achievement.types.js";
+export { parsePlayerSnapshot, parseDump } from "./achievements/achievement.serialization.js";
+export { TITLE_RARITY_WEIGHTS } from "./title/title.types.js";
+export { OFFICIAL_TITLES, registerOfficialTitles } from "./title/official-titles.js";
+export {
+  handlePlayerDeath,
+  resolveDeathItemLossConfig,
+  DEFAULT_DEATH_LOSS_RATES,
+} from "./player/Player.death.js";
+export { DEFAULT_ITEM_BANK_CAPACITY_SLOTS, resolveItemBankCapacity } from "./economy/item-bank.js";
+export { resolveDeathRespawnConfig } from "./player/player.life.js";
+export { parseDuration } from "./utils/duration.js";
+export {
+  BESTIARY_SPECIES,
+  DEFAULT_DISCOVERY_GOLD,
+} from "./bestiary/bestiary.species.js";
+export { BESTIARY_UNKNOWN_LABEL, parseBestiaryState } from "./bestiary/bestiary.types.js";
+export { FISHING_JOB } from "./jobs/official/fishing.job.js";
+export { MINING_JOB } from "./jobs/official/mining.job.js";
+export { WOODCUTTING_JOB } from "./jobs/official/woodcutting.job.js";
+export { OFFICIAL_JOBS, registerOfficialJobs } from "./jobs/official-jobs.js";
+export {
+  applyYield,
+  RARITY_LUCK_FACTORS,
+  xpRequiredForLevel,
+  effectiveCooldownMs,
+  readToolModifiers,
+  pickLootEntry,
+} from "./jobs/job.rules.js";
+export {
+  DEFAULT_JOB_MAX_LEVEL,
+  DEFAULT_JOB_XP_CURVE,
+  JOB_TOOL_NBT_KEYS,
+  MAX_COOLDOWN_REDUCTION_PERCENT,
+} from "./jobs/job.types.js";
+export { parsePlayerJobsState } from "./jobs/job.serialization.js";
+export { createOfficialPacks, OFFICIAL_PACK_IDS } from "./content/official-packs.js";
+export { DEFAULT_ENEMY_SPAWN_RULES } from "./enemy/enemy.definition.js";
+export { OFFICIAL_ENEMIES, registerOfficialEnemies } from "./enemy/official-enemies.js";
+export { OFFICIAL_CLASSES, registerOfficialClasses } from "./player/official-classes.js";
+export { createOfficialLocations } from "./location/official-map.js";
+export { OFFICIAL_ACHIEVEMENTS } from "./achievements/official-achievements.js";
+export { createPlayerRewardHandler } from "./achievements/achievement.rewards.js";

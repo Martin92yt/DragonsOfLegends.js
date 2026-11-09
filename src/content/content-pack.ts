@@ -1,3 +1,4 @@
+import type { AchievementDefinition } from "../achievements/achievement.types.js";
 import type { EnemyDefinition } from "../enemy/enemy.definition.js";
 import type { EffectDefinition } from "../effects/effect.types.js";
 import type { LootboxDefinition } from "../lootbox/lootbox.types.js";
@@ -41,6 +42,11 @@ export interface ContentPack {
     readonly jobs?: readonly JobDefinition[];
     /** Titles. */
     readonly titles?: readonly TitleDefinition[];
+    /**
+     * Achievements. Their rewards may reference items and titles of this pack or of a dependency (`dependsOn`).
+     * Loaded after the titles.
+     */
+    readonly achievements?: readonly AchievementDefinition[];
     /**
      * Locations. They are added atomically and the whole graph is validated: after the pack is loaded the world must
      * have exactly one starting city, reciprocal connections and no unreachable location.
