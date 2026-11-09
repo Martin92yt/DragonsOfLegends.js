@@ -220,7 +220,7 @@ describe("Combat resolution", () => {
         assert.equal((await world.combat.attack(player.id)).enemyDamage, 14);
     });
 
-    it("ignores bonuses of a broken weapon", { todo: "M3 a weapon at durability 0 keeps all of its bonuses" }, async (t) => {
+    it("ignores bonuses of a broken weapon", async (t) => {
         const world = createWorld();
         const player = await spawn(world);
         fixAttributes(player);
@@ -230,7 +230,7 @@ describe("Combat resolution", () => {
         assert.equal((await world.combat.attack(player.id)).enemyDamage, 10);
     });
 
-    it("hands the enemy loot over to the winner", { todo: "M1 rolled loot is never added to the player's inventory" }, async (t) => {
+    it("hands the enemy loot over to the winner", async (t) => {
         const world = createWorld();
         const player = await spawn(world);
         world.combat.startWithEnemy(player, makeEnemy({ type: EnemyType.Goblin, health: 1 }));

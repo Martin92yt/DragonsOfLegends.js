@@ -23,6 +23,11 @@ export interface EnemyDrop {
 
 export default class EnemyEntity {
     public droppedLootList: EnemyDrop[] = [];
+    /**
+     * Loot luck in percent of whoever fights the enemy: every drop rate is multiplied by `1 + luck / 100` (capped at 100%).
+     * Set by the combat before the blow that kills the enemy.
+     */
+    public dropLuckPercent = 0;
     private hasDroppedLoot = false;
 
     constructor(
@@ -34,7 +39,9 @@ export default class EnemyEntity {
         public readonly defense: number,
         public readonly experience: number,
         public readonly gold: number,
-        private readonly lootTable: readonly LootItem[] = []
+        private readonly lootTable: readonly LootItem[] = [],
+        /** Difficulty tier of the species (`beginner`, `boss`...), when known. */
+        public readonly tier?: string
     ) {}
 
     public takeDamage(incomingDamage: number): number {
@@ -97,7 +104,8 @@ export default class EnemyEntity {
     public rollDrops(): EnemyDrop[] {
         const droppedItemsList: EnemyDrop[] = [];
         for (const lootItem of this.lootTable) {
-            if (Math.random() * 100 <= lootItem.dropRate) {
+            const effectiveDropRate = Math.min(100, lootItem.dropRate * (1 + Math.max(0, this.dropLuckPercent) / 100));
+            if (Math.random() * 100 <= effectiveDropRate) {
                 const quantity = this.rollItemQuantity(lootItem);
                 droppedItemsList.push({ loot: lootItem, quantity });
             }

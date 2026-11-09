@@ -124,7 +124,7 @@ describe("PlayerEntity progression", () => {
         assert.equal(player.attributes.points, 2);
     });
 
-    it("heals the player completely on level-up", { todo: "M4 levelUp() does not await updateMaxHealth(), so the player ends below the new maximum" }, async () => {
+    it("heals the player completely on level-up", async () => {
         const player = await spawn(createWorld());
         player.addXP(110);
         await settle();
@@ -174,7 +174,7 @@ describe("PlayerEntity damage", () => {
         assert.equal(await player.takeDamage(10), null);
     });
 
-    it("applies equipped armor defense bonuses", { todo: "C5 processEquipmentStats() reads item.data instead of item.itemNbtData" }, async () => {
+    it("applies equipped armor defense bonuses", async () => {
         const player = await spawn(createWorld());
         fixAttributes(player);
         await giveAndEquip(player, "chest", makeItem("plate", ItemCategory.Armor, ItemRarity.Epic, 1), { defenseBonus: 500, durability: 100 });
@@ -182,7 +182,7 @@ describe("PlayerEntity damage", () => {
         assert.ok(result.reducedDamage < 20, `expected heavy mitigation, got ${result.reducedDamage}`);
     });
 
-    it("wears equipped armor down when it absorbs damage", { todo: "C5 armor durability is never reduced" }, async () => {
+    it("wears equipped armor down when it absorbs damage", async () => {
         const player = await spawn(createWorld());
         await giveAndEquip(player, "chest", makeItem("plate", ItemCategory.Armor, ItemRarity.Common, 1), { defenseBonus: 5, durability: 100 });
         await player.takeDamage(50);
@@ -196,11 +196,11 @@ describe("PlayerEntity travel", () => {
         const world = createWorld();
         const player = await spawn(world);
         stubRandom(t, 0.99);
-        const result = await travel(t, player, "Ironmill", 2, 1);
+        const result = await travel(t, player, "Embercross", 2, 1);
         assert.equal(result.arrived, true);
         assert.equal(result.attacked, false);
-        assert.equal(result.locationId, "Ironmill");
-        assert.equal(player.location, "Ironmill");
+        assert.equal(result.locationId, "Embercross");
+        assert.equal(player.location, "Embercross");
         assert.equal(player.isTravelling, false);
         assert.ok(result.travelDurationMs >= 1000 + 2 * 900 && result.travelDurationMs < 1000 + 1500 + 2 * 900);
     });
@@ -228,7 +228,7 @@ describe("PlayerEntity travel", () => {
         const world = createWorld();
         const player = await spawn(world);
         stubRandom(t, 0);
-        const result = await travel(t, player, "Ironmill", 1, 1);
+        const result = await travel(t, player, "Embercross", 1, 1);
         const enemy = defined(result.enemy);
         assert.equal(result.arrived, false);
         assert.equal(result.attacked, true);
@@ -246,18 +246,18 @@ describe("PlayerEntity travel", () => {
     it("spawns aquatic enemies for water destinations", async (t) => {
         const player = await spawn(createWorld());
         stubRandom(t, 0);
-        const result = await travel(t, player, "Blue Lake");
+        const result = await travel(t, player, "Deep Coast");
         assert.equal(defined(result.enemy).type, EnemyType.Hydra);
     });
 
-    it("does not treat 'Palace Of Stars' as a water area", { todo: "M5 ambush uses a regex on the id ('lac' matches 'Palace') instead of the OnWater flag" }, async (t) => {
+    it("does not treat 'Palace Of Stars' as a water area", async (t) => {
         const player = await spawn(createWorld());
         stubRandom(t, 0);
         const result = await travel(t, player, "Palace Of Stars");
         assert.ok(![EnemyType.Hydra, EnemyType.GiantRat].map(String).includes(defined(result.enemy).type));
     });
 
-    it("rejects destinations that do not exist in the world graph", { todo: "M5 moveTo() never consults LocationManager" }, async (t) => {
+    it("rejects destinations that do not exist in the world graph", async (t) => {
         const player = await spawn(createWorld());
         stubRandom(t, 0.99);
         t.mock.timers.enable({ apis: ["setTimeout"] });

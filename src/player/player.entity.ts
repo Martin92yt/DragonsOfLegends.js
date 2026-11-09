@@ -3,15 +3,20 @@ import type { PlayerClassId } from "./player.class.js";
 import { consola } from "consola";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
 import { InventoryEntity } from "../inventory/inventory.js";
+import type { InventoryItemRecord, ItemNBT } from "../inventory/inventory.interface.js";
 import type { AmbushZone, EnemyDefinition } from "../enemy/enemy.definition.js";
 import { ExplorationResult, GainExperienceResult, DamageResult } from "../types/result.js";
-import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError } from "../types/error.js";
+import { MoveInCombatError, NoAttributePointsError, PlayerAlreadyTravellingError, UnknownLocationError } from "../types/error.js";
+import { LocationFlags, hasFlag } from "../location/location.flags.js";
 import World from "../world.js";
 import PlayerMarriage from "./player.marriage.js";
 import PlayerTitles from "./player.titles.js";
 import PlayerBestiary from "./player.bestiary.js";
 import PlayerJobs from "./player.jobs.js";
 import PlayerLife from "./player.life.js";
+import PlayerEffects from "./player.effects.js";
+import { readAmuletModifiers } from "../inventory/amulet.js";
+import { resolvePlayerModifiers, scaleExperience, type PlayerModifiers } from "./player.modifiers.js";
 import ItemBank from "../economy/item-bank.js";
 import EnemyEntity from "../enemy/enemy.js";
 import type Combat from "../combat/combat.js";
@@ -56,6 +61,8 @@ export default class PlayerEntity {
     public inCombat = false;
     /** Life state: the single source of truth for whether the player can act (see {@link PlayerEntity.assertCanAct}). */
     public readonly life: PlayerLife;
+    /** Temporary effects (potions, buffs, damage or heal over time). */
+    public readonly effects: PlayerEffects;
     
     /**
      * Creates a player entity.
@@ -82,6 +89,8 @@ export default class PlayerEntity {
      * @param equippedTitleId The identifier of the equipped title, or an empty string.
      * @param bestiaryState The saved bestiary state (validated).
      * @param jobsState The saved jobs state (validated).
+     * @param deadUntil The persisted respawn timestamp (ms), or null if the player is alive.
+     * @param effectsState The saved effects state (validated).
      * @returns void
      */
     public constructor(
@@ -107,7 +116,8 @@ export default class PlayerEntity {
         equippedTitleId = "",
         bestiaryState: unknown = {},
         jobsState: unknown = {},
-        deadUntil: number | null = null
+        deadUntil: number | null = null,
+        effectsState: unknown = {}
     ) {
         this.worldInstance = worldInstance;
         this.level = Math.max(1, level);
@@ -142,6 +152,7 @@ export default class PlayerEntity {
         this.bestiary = new PlayerBestiary(bestiaryState, worldInstance.enemies);
         this.jobs = new PlayerJobs(this, jobsState);
         this.life = new PlayerLife(this, deadUntil);
+        this.effects = new PlayerEffects(this, effectsState);
         this.updateMaxHealth();
     }
 
@@ -184,6 +195,9 @@ export default class PlayerEntity {
     public async moveTo(destinationId: string, distance = 1, danger = 1): Promise<ExplorationResult> {
         this.assertCanAct("player.moveTo");
         this.validateTravelState();
+        if (!this.worldInstance.location.has(destinationId)) {
+            throw new UnknownLocationError(destinationId);
+        }
         this.isTravelling = true;
 
         try {
@@ -287,6 +301,18 @@ export default class PlayerEntity {
     }
 
     /**
+     * Adds experience boosted by the amulets and the active effects (see {@link PlayerEntity.getModifiers}).
+     * Use it for gameplay rewards; `addXP` adds the exact amount.
+     *
+     * @param baseAmount The experience before the bonuses.
+     * @returns The experience gain result (`gainedAmount` is the boosted amount).
+     */
+    public async gainXP(baseAmount: number): Promise<GainExperienceResult> {
+        const { xpMultiplier } = await this.getModifiers();
+        return this.addXP(scaleExperience(baseAmount, xpMultiplier));
+    }
+
+    /**
      * Applies damage to the player after calculating equipment and attribute defenses.
      *
      * @param damage The raw incoming damage amount.
@@ -362,6 +388,45 @@ export default class PlayerEntity {
      */
     public isAlive(): boolean {
         return this.health.current > 0;
+    }
+
+    /**
+     * Restores health, capped at the maximum health. A dead player cannot be healed (see `life.revive`).
+     *
+     * @param amount The health points to restore (> 0).
+     * @param source Where the healing comes from (`item:<id>`, `effect:<id>`...), reported by the `playerHeal` event.
+     * @returns The health points actually restored (0 when the amount is invalid, the player is dead or already at full health).
+     */
+    public heal(amount: number, source?: string): number {
+        if (!(amount > 0) || this.isDead) {
+            return 0;
+        }
+
+        const previousHealth = this.health.current;
+        this.health.current = Math.min(this.health.max, previousHealth + amount);
+        const healed = this.health.current - previousHealth;
+        if (healed > 0) {
+            // Fire-and-forget: heal is synchronous, so asynchronous listeners are not awaited.
+            this.worldInstance.events.emit("playerHeal", {
+                playerId: this.id,
+                player: this,
+                amount,
+                healed,
+                health: this.health.current,
+                maxHealth: this.health.max,
+                ...(source !== undefined ? { source } : {})
+            });
+        }
+        return healed;
+    }
+
+    /**
+     * Computes the passive modifiers of the player: worn amulets combined with active effects.
+     *
+     * @returns The experience multiplier, the loot luck and the critical-hit bonus.
+     */
+    public async getModifiers(): Promise<PlayerModifiers> {
+        return resolvePlayerModifiers(readAmuletModifiers(await this.inventory.getItems()), this.effects.getModifiers());
     }
 
     /**
@@ -467,46 +532,48 @@ export default class PlayerEntity {
     /**
      * Processes equipped item stats and durability changes.
      */
-    private processEquipmentStats(items: any[], damage: number): { flatDefense: number; percentDefense: number } {
+    private processEquipmentStats(items: InventoryItemRecord[], damage: number): { flatDefense: number; percentDefense: number } {
         let flatDefense = 0;
         let percentDefense = 0;
 
         for (const item of items) {
-            if (!item.isEquipped || !item.data) {
+            // Rationale: the item data lives in `itemNbtData`; a broken piece (durability 0) protects no more.
+            const data = item.itemNbtData;
+            if (!item.isEquipped || !data) {
+                continue;
+            }
+            if (typeof data.durability === "number" && data.durability <= 0) {
                 continue;
             }
 
-            const defenseBonus = item.data.defenseBonus ?? item.data.defense;
+            const defenseBonus = data.defenseBonus ?? data["defense"];
             if (typeof defenseBonus === "number") {
                 flatDefense += defenseBonus;
             }
 
-            if (typeof item.data.armorBonusPercent === "number") {
-                percentDefense += item.data.armorBonusPercent / 100;
+            const armorBonusPercent = data["armorBonusPercent"];
+            if (typeof armorBonusPercent === "number") {
+                percentDefense += armorBonusPercent / 100;
             }
 
-            this.processItemDurability(item, damage, defenseBonus);
+            this.processItemDurability(item, data, damage, typeof defenseBonus === "number" || typeof armorBonusPercent === "number");
         }
 
         return { flatDefense, percentDefense };
     }
 
     /**
-     * Updates an individual item's durability.
+     * Wears an individual item down (the inventory snapshot is saved by the caller).
      */
-    private processItemDurability(item: any, damage: number, defenseBonus: unknown): void {
-        const hasDurability = typeof item.data.durability === "number" && item.data.durability > 0;
-        const providesDefense = typeof defenseBonus === "number" || typeof item.data.armorBonusPercent === "number";
-
-        if (!hasDurability || !providesDefense) {
+    private processItemDurability(item: InventoryItemRecord, data: ItemNBT, damage: number, providesDefense: boolean): void {
+        if (typeof data.durability !== "number" || data.durability <= 0 || !providesDefense) {
             return;
         }
 
-        const rarityKey = item.rarity?.toLowerCase() ?? "";
-        const multiplier = PlayerEntity.RARITY_MULTIPLIERS[rarityKey] ?? 1;
+        const multiplier = PlayerEntity.RARITY_MULTIPLIERS[String(item.rarity).toLowerCase()] ?? 1;
         const durabilityLoss = Math.max(1, Math.floor(damage * 0.06 * multiplier));
-        
-        item.data.durability = Math.max(0, item.data.durability - durabilityLoss);
+
+        data.durability = Math.max(0, data.durability - durabilityLoss);
     }
 
     /**
@@ -537,7 +604,9 @@ export default class PlayerEntity {
      * ambush in the zone (the player then arrives safely).
      */
     private handleAmbush(destinationId: string, travelDurationMs: number): { exploration: ExplorationResult; combat: Combat; enemy: EnemyEntity } | undefined {
-        const isWaterArea = /water|sea|ocean|lake|river|lac|eau/i.test(destinationId);
+        // Rationale: the zone comes from the OnWater flag of the map, not from a guess on the name ("Palace" contains "lac").
+        const destination = this.worldInstance.location.get(destinationId);
+        const isWaterArea = destination !== undefined && hasFlag(destination.locationFlags, LocationFlags.OnWater);
         const ambusher = this.pickAmbusher(isWaterArea ? "water" : "land");
         if (!ambusher) return undefined;
 
@@ -556,7 +625,8 @@ export default class PlayerEntity {
             1 + this.level * 0.7,
             8 * this.level,
             enemyGoldReward,
-            ambusher.loot ?? []
+            ambusher.loot ?? [],
+            ambusher.tier
         );
 
         const combat = this.worldInstance.combat.startWithEnemy(this, enemy);
@@ -581,8 +651,14 @@ export default class PlayerEntity {
      */
     private levelUp(): void {
         this.level++;
-        this.updateMaxHealth();
+        // Rationale: raise the maximum right away, then re-read the equipment bonuses; the player ends at the new maximum.
+        this.health.max += PlayerEntity.HP_PER_LEVEL;
         this.health.current = this.health.max;
+        void this.updateMaxHealth()
+            .then(() => {
+                this.health.current = this.health.max;
+            })
+            .catch((error: unknown) => consola.error(`Failed to refresh the maximum health of ${this.id}.`, error));
         this.attributes.strength++;
         this.attributes.agility++;
         this.attributes.intelligence++;

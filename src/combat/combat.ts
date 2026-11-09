@@ -51,6 +51,8 @@ export default class Combat {
      * Executes the player's attack action.
      */
     private async executePlayerTurn(): Promise<number> {
+        // Rationale: the loot of an enemy is rolled when it dies, so the luck of the killer must be known before the blow.
+        this.enemyEntity.dropLuckPercent = (await this.playerEntity.getModifiers()).luckPercent;
         const rawPlayerDamageOutput = await this.getPlayerDamage();
         return this.enemyEntity.takeDamage(rawPlayerDamageOutput);
     }
@@ -59,9 +61,11 @@ export default class Combat {
      * Handles rewards and state when the enemy is defeated.
      */
     private async handleEnemyDefeat(inflictedEnemyDamage: number): Promise<CombatResult> {
-        this.playerEntity.addXP(this.enemyEntity.experience);
+        // Amulets and potions boost the experience (the event below reports the experience actually gained).
+        const { gainedAmount: experience } = await this.playerEntity.gainXP(this.enemyEntity.experience);
         this.playerEntity.gold += this.enemyEntity.gold;
         consola.success(`${this.playerEntity.name} defeated ${this.enemyEntity.name}.`);
+        await this.collectLoot();
 
         // Listeners (bestiary, achievements...) are awaited so their effects are visible when the result is returned.
         await this.playerEntity.worldInstance.events.emitAsync("enemyDefeat", {
@@ -69,10 +73,12 @@ export default class Combat {
             player: this.playerEntity,
             combat: this,
             enemy: this.enemyEntity,
-            enemyId: this.enemyEntity.name,
+            // Rationale: the identifier of the species (registry id), not the display name ("★ Goblin (Elite)").
+            enemyId: this.enemyEntity.type,
             enemyType: this.enemyEntity.type,
+            tier: this.enemyEntity.tier,
             locationId: this.playerEntity.location,
-            experience: this.enemyEntity.experience,
+            experience,
             gold: this.enemyEntity.gold
         });
 
@@ -84,6 +90,20 @@ export default class Combat {
             defeat: false,
             enemy: this.enemyEntity
         };
+    }
+
+    /**
+     * Hands the loot rolled on the enemy over to the winner.
+     * A failure on one item is logged and never cancels the victory.
+     */
+    private async collectLoot(): Promise<void> {
+        for (const drop of this.enemyEntity.droppedLootList) {
+            try {
+                await this.playerEntity.inventory.add(drop.loot, drop.quantity);
+            } catch (error) {
+                consola.error(`Failed to give ${drop.quantity}x ${drop.loot.itemId} to ${this.playerEntity.name}.`, error);
+            }
+        }
     }
 
     /**
@@ -131,7 +151,8 @@ export default class Combat {
 
         const totalCriticalRate = Math.min(
             Combat.MAX_CRIT_RATE,
-            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus
+            // Rationale: worn amulets are already counted in the item bonuses; only the temporary effects are added here.
+            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus + this.playerEntity.effects.getModifiers().critRateBonus
         );
 
         if (Math.random() < totalCriticalRate) {
@@ -151,6 +172,12 @@ export default class Combat {
 
         for (const inventoryItemRecord of inventoryItemRecords) {
             if (!inventoryItemRecord.isEquipped || !inventoryItemRecord.itemNbtData) {
+                continue;
+            }
+
+            // Rationale: a broken item (durability 0) gives no bonus anymore.
+            const { durability } = inventoryItemRecord.itemNbtData;
+            if (typeof durability === "number" && durability <= 0) {
                 continue;
             }
 

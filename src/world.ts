@@ -26,12 +26,20 @@ import type {
   EnemyDefinition,
   EnemySpawnRule,
 } from "./enemy/enemy.definition.js";
+import { AchievementManager } from "./achievements/achievement.manager.js";
+import { createPlayerRewardHandler } from "./achievements/achievement.rewards.js";
+import EffectRegistry from "./effects/effect.registry.js";
+import type { EffectDefinition } from "./effects/effect.types.js";
+import LootboxManager from "./lootbox/lootbox.manager.js";
+import type { LootboxDefinition } from "./lootbox/lootbox.types.js";
+import ShopManager from "./shop/shop.manager.js";
+import type { ShopDefinition } from "./shop/shop.types.js";
 import ItemRegistry from "./inventory/item.registry.js";
 import type { Item } from "./inventory/inventory.interface.js";
 import PlayerClassRegistry from "./player/player-class.registry.js";
 import type { PlayerClassDefinition } from "./player/player-class.definition.js";
 import ContentManager from "./content/content-manager.js";
-import type { ContentPack } from "./content/content-pack.js";
+import type { ContentPack, LoadedContentPack } from "./content/content-pack.js";
 import {
   createOfficialPacks,
   OFFICIAL_PACK_IDS,
@@ -58,6 +66,17 @@ export interface WorldInitializationOptions {
   premadeEnemies?: boolean;
   /** Loads the official player classes (enabled by default). */
   premadeClasses?: boolean;
+  /**
+   * Loads the official items (starter equipment, potions, amulets, pouches), effects, lootboxes and shops.
+   * Disabled by default, even with `premadeContent`: it makes the `starterItems` exist in the catalogue, so new players start receiving them.
+   */
+  premadeItems?: boolean;
+  /** Additional or custom temporary effects registered at startup. */
+  customEffects?: readonly EffectDefinition[];
+  /** Additional or custom lootboxes registered at startup. */
+  customLootboxes?: readonly LootboxDefinition[];
+  /** Additional or custom shops registered at startup. */
+  customShops?: readonly ShopDefinition[];
   /** Additional or custom enemy species registered at startup. */
   customEnemies?: readonly EnemyDefinition[];
   /** Additional or custom items registered at startup. */
@@ -70,6 +89,18 @@ export interface WorldInitializationOptions {
   packs?: readonly ContentPack[];
   /** Rules choosing the enemy tier from the player level (see `DEFAULT_ENEMY_SPAWN_RULES`). */
   enemySpawnRules?: readonly EnemySpawnRule[];
+  /**
+   * Loads the whole official content at startup, like `world.loadOfficialPack()`: map, classes, enemies, jobs,
+   * titles, items (starter equipment, potions, amulets, pouches), shops and achievements.
+   * Individual `premade*` options set to `false` still win.
+   * @defaultValue false
+   */
+  officialPack?: boolean;
+  /**
+   * Loads the official achievements (they need the official titles and items, so `officialPack: true` or
+   * `loadOfficialPack()` is the simple way). Disabled by default.
+   */
+  premadeAchievements?: boolean;
   /** Loads the official titles (enabled by default). */
   premadeTitles?: boolean;
   /** Loads the official jobs (enabled by default). */
@@ -122,10 +153,18 @@ export default class World extends EventEmitter {
   public readonly bank: BankClass;
   public readonly players: PlayerManager;
   public readonly titles: TitleManager;
+  /** Achievements (objectives with rewards), driven by the game events. */
+  public readonly achievements: AchievementManager;
   /** Item catalogue. */
   public readonly items: ItemRegistry;
   /** Enemy species. */
   public readonly enemies: EnemyRegistry;
+  /** Temporary effects (potions, buffs). */
+  public readonly effects: EffectRegistry;
+  /** Lootboxes (mystery pouches). */
+  public readonly lootboxes: LootboxManager;
+  /** Shops (buy and sell with gold). */
+  public readonly shops: ShopManager;
   /** Player classes. */
   public readonly classes: PlayerClassRegistry;
   /** Loads content packs (official and third-party) into the registries above. */
@@ -144,12 +183,16 @@ export default class World extends EventEmitter {
     super();
 
     // Fusion propre des options par défaut et personnalisées
-    const premade = initializationOptions.premadeContent ?? true;
+    const officialPack = initializationOptions.officialPack ?? false;
+    const premade = officialPack || (initializationOptions.premadeContent ?? true);
     this.initializationOptions = {
       premadeMap: premade,
       premadeTitles: premade,
       premadeJobs: premade,
       premadeEnemies: premade,
+      // Opt-in: registering the official items starts granting the starter items to every new player.
+      premadeItems: officialPack,
+      premadeAchievements: officialPack,
       premadeClasses: premade,
       checkUpdates: true,
       deathMode: "cooldown",
@@ -185,8 +228,15 @@ export default class World extends EventEmitter {
     this.titles = new TitleManager();
     this.items = new ItemRegistry();
     this.enemies = new EnemyRegistry();
+    this.effects = new EffectRegistry();
+    this.lootboxes = new LootboxManager(this.items);
+    this.shops = new ShopManager(this.items);
     this.classes = new PlayerClassRegistry();
     this.events = new EventEngine<GameEvents>({ logger: consola });
+    this.achievements = new AchievementManager(this.events, {
+      rewardHandler: createPlayerRewardHandler(this),
+      logger: consola,
+    });
     this.jobs = new JobManager();
     this.combat = new CombatManager(
       this.enemies,
@@ -201,9 +251,13 @@ export default class World extends EventEmitter {
     this.content = new ContentManager(this, {
       items: this.items,
       enemies: this.enemies,
+      effects: this.effects,
+      lootboxes: this.lootboxes,
+      shops: this.shops,
       classes: this.classes,
       jobs: this.jobs,
       titles: this.titles,
+      achievements: this.achievements,
       location: this.location,
     });
 
@@ -249,10 +303,12 @@ export default class World extends EventEmitter {
     const officialPacks = createOfficialPacks();
     const enabled: Readonly<Record<string, boolean | undefined>> = {
       [OFFICIAL_PACK_IDS.enemies]: options.premadeEnemies,
+      [OFFICIAL_PACK_IDS.items]: options.premadeItems,
       [OFFICIAL_PACK_IDS.classes]: options.premadeClasses,
       [OFFICIAL_PACK_IDS.jobs]: options.premadeJobs,
       [OFFICIAL_PACK_IDS.titles]: options.premadeTitles,
       [OFFICIAL_PACK_IDS.map]: options.premadeMap,
+      [OFFICIAL_PACK_IDS.achievements]: options.premadeAchievements,
     };
     for (const pack of officialPacks) {
       if (enabled[pack.id]) this.content.use(pack);
@@ -262,6 +318,9 @@ export default class World extends EventEmitter {
       id: "world:custom",
       name: "World options content",
       ...(options.customItems ? { items: options.customItems } : {}),
+      ...(options.customEffects ? { effects: options.customEffects } : {}),
+      ...(options.customLootboxes ? { lootboxes: options.customLootboxes } : {}),
+      ...(options.customShops ? { shops: options.customShops } : {}),
       ...(options.customEnemies ? { enemies: options.customEnemies } : {}),
       ...(options.customClasses ? { classes: options.customClasses } : {}),
       ...(options.customJobs ? { jobs: options.customJobs } : {}),
@@ -275,6 +334,24 @@ export default class World extends EventEmitter {
     for (const pack of options.packs ?? []) {
       this.content.use(pack);
     }
+  }
+
+  /**
+   * Loads the whole official content in one call: map, classes, enemies, jobs, titles, items (starter equipment,
+   * potions, amulets, pouches), shops, lootboxes and achievements. Packs that are already loaded are skipped,
+   * so it is safe to call after the default startup content, and your own content can be added on top
+   * (`world.content.use(myPack)`, `{ override: true }` to replace an official entry).
+   *
+   * @returns The summaries of the packs that were loaded by this call.
+   * @throws {RegistryLockedError} If the content is locked.
+   */
+  public loadOfficialPack(): LoadedContentPack[] {
+    const loaded: LoadedContentPack[] = [];
+    for (const pack of createOfficialPacks()) {
+      if (this.content.has(pack.id)) continue;
+      loaded.push(this.content.use(pack));
+    }
+    return loaded;
   }
 
   /**

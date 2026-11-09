@@ -1,11 +1,14 @@
 import PlayerEntity from "../player/player.entity.js";
-import { BankLockedError, InsufficientFundsError, InvalidAmountError } from "../types/error.js";
+import AsyncQueue from "../utils/async-queue.js";
+import { BankLimitReachedError, BankLockedError, InsufficientFundsError, InvalidAmountError } from "../types/error.js";
 import { BankResult } from "../types/result.js";
 import { consola } from "consola";
 import World from "../world.js";
 
 export default class BankClass {
     public readonly worldInstance: World;
+    /** Serializes the transactions: a balance is never checked and spent by two calls at once. */
+    private readonly transactions = new AsyncQueue();
 
     /**
      * Creates a new BankClass instance.
@@ -81,22 +84,25 @@ export default class BankClass {
         playerEntity.assertCanAct("bank.deposit");
         this.validateTransaction(playerEntity, depositAmount, "Deposit");
 
-        if (playerEntity.gold < depositAmount) {
-            consola.warn(`Deposit failed for ${playerEntity.name}: insufficient wallet funds (${playerEntity.gold}/${depositAmount}).`);
-            throw new InsufficientFundsError("Not enough gold in wallet.");
-        }
+        await this.transactions.run(async () => {
+            playerEntity.assertCanAct("bank.deposit"); // re-checked: the player may have died while queued
+            if (playerEntity.gold < depositAmount) {
+                consola.warn(`Deposit failed for ${playerEntity.name}: insufficient wallet funds (${playerEntity.gold}/${depositAmount}).`);
+                throw new InsufficientFundsError("Not enough gold in wallet.");
+            }
 
-        const maxGoldLimit = this.worldInstance.initializationOptions.bankMaxGoldLimit ?? 500000;
-        
-        const effectiveLimit = playerEntity.marriage.isMarried() ? maxGoldLimit * 2 : maxGoldLimit;
+            const maxGoldLimit = this.worldInstance.initializationOptions.bankMaxGoldLimit ?? 500000;
+            // Rationale: -1 means "unlimited" and must not be doubled for married players (it would become -2).
+            const effectiveLimit = maxGoldLimit === -1 ? -1 : playerEntity.marriage.isMarried() ? maxGoldLimit * 2 : maxGoldLimit;
 
-        if (effectiveLimit !== -1 && (playerEntity.bankGold + depositAmount) > effectiveLimit) {
-            consola.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);
-            throw new Error(`Bank gold limit reached (Maximum allowed: ${effectiveLimit}).`);
-        }
+            if (effectiveLimit !== -1 && (playerEntity.bankGold + depositAmount) > effectiveLimit) {
+                consola.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);
+                throw new BankLimitReachedError(effectiveLimit);
+            }
 
-        playerEntity.gold -= depositAmount;
-        playerEntity.bankGold += depositAmount;
+            playerEntity.gold -= depositAmount;
+            playerEntity.bankGold += depositAmount;
+        });
 
         consola.success(`${playerEntity.name} deposited ${depositAmount} gold.`);
         await this.worldInstance.events.emitAsync("bankDeposit", {
@@ -117,27 +123,29 @@ export default class BankClass {
         playerEntity.assertCanAct("bank.withdraw");
         this.validateTransaction(playerEntity, withdrawalAmount, "Withdrawal");
 
-        const totalBankBeforeWithdrawal = await this.getBalanceTotal(playerEntity);
-        if (totalBankBeforeWithdrawal < withdrawalAmount) {
-            consola.warn(`Withdrawal failed for ${playerEntity.name}: insufficient bank funds (${totalBankBeforeWithdrawal}/${withdrawalAmount}).`);
-            throw new InsufficientFundsError("Not enough gold in the bank.");
-        }
-
-        let remainingAmountToWithdraw = withdrawalAmount;
-
-        if (playerEntity.bankGold >= remainingAmountToWithdraw) {
-            playerEntity.bankGold -= remainingAmountToWithdraw;
-        } else {
-            remainingAmountToWithdraw -= playerEntity.bankGold;
-            playerEntity.bankGold = 0;
-
-            const validPartnerEntity = await this.getValidPartner(playerEntity);
-            if (validPartnerEntity) {
-                validPartnerEntity.bankGold -= remainingAmountToWithdraw;
+        await this.transactions.run(async () => {
+            playerEntity.assertCanAct("bank.withdraw"); // re-checked: the player may have died while queued
+            const totalBankBeforeWithdrawal = await this.getBalanceTotal(playerEntity);
+            if (totalBankBeforeWithdrawal < withdrawalAmount) {
+                consola.warn(`Withdrawal failed for ${playerEntity.name}: insufficient bank funds (${totalBankBeforeWithdrawal}/${withdrawalAmount}).`);
+                throw new InsufficientFundsError("Not enough gold in the bank.");
             }
-        }
 
-        playerEntity.gold += withdrawalAmount;
+            let remainingAmountToWithdraw = withdrawalAmount;
+            if (playerEntity.bankGold >= remainingAmountToWithdraw) {
+                playerEntity.bankGold -= remainingAmountToWithdraw;
+            } else {
+                remainingAmountToWithdraw -= playerEntity.bankGold;
+                playerEntity.bankGold = 0;
+
+                const validPartnerEntity = await this.getValidPartner(playerEntity);
+                if (validPartnerEntity) {
+                    validPartnerEntity.bankGold -= remainingAmountToWithdraw;
+                }
+            }
+
+            playerEntity.gold += withdrawalAmount;
+        });
         const totalBankAfterWithdrawal = await this.getBalanceTotal(playerEntity);
 
         consola.success(`${playerEntity.name} withdrew ${withdrawalAmount} gold.`);

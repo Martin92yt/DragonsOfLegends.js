@@ -49,13 +49,13 @@ describe("InventoryEntity add / remove", () => {
         assert.deepEqual(blades[0].itemNbtData, { durability: 50 });
     });
 
-    it("never loses a concurrent add", { todo: "C3 read-modify-write without a lock loses concurrent updates" }, async () => {
+    it("never loses a concurrent add", async () => {
         const player = await spawn(createWorld());
         await Promise.all([player.inventory.add(makeItem("rope"), 1), player.inventory.add(makeItem("rope"), 1)]);
         assert.equal(await totalQuantity(player, "rope"), 2);
     });
 
-    it("respects maxStack", { todo: "C3 maxStack is never enforced" }, async () => {
+    it("respects maxStack", async () => {
         const player = await spawn(createWorld());
         await player.inventory.add(makeItem("rope", ItemCategory.Materials, ItemRarity.Common, 64), 200);
         const records = await player.inventory.getItems();
@@ -81,7 +81,7 @@ describe("InventoryEntity add / remove", () => {
         assert.equal(await totalQuantity(player, "rope"), 2);
     });
 
-    it("preserves the display name of stored items", { todo: "C4 SQLite adapter overwrites name with itemId (operator precedence)" }, async () => {
+    it("preserves the display name of stored items", async () => {
         const player = await spawn(createWorld());
         await player.inventory.add(makeItem("sword", ItemCategory.Weapons), 1);
         assert.equal((await findRecord(player, "sword"))?.name, "Display sword");
@@ -156,7 +156,7 @@ describe("InventoryEntity equipment", () => {
         assert.ok(Object.entries(equipment).filter(([key]) => key !== "playerId").every(([, value]) => value === null));
     });
 
-    it("maps worn items to the declared EquipmentRecord fields", { todo: "C10 adapters write record['helmet'] instead of record.helmetItemId" }, async () => {
+    it("maps worn items to the declared EquipmentRecord fields", async () => {
         const player = await spawn(createWorld());
         await giveAndEquip(player, "helmet", makeItem("helm", ItemCategory.Armor));
         await giveAndEquip(player, "amulet1", makeItem("charm", ItemCategory.Amulet));
@@ -225,15 +225,15 @@ describe("InventoryEntity economy and persistence", () => {
         assert.equal(a.inventory.playerEntityReference, b);
     });
 
-    it("consumes usable items", { todo: "M2 InventoryEntity.use() is a stub that always returns false" }, async () => {
+    it("consumes usable items", async () => {
         const player = await spawn(createWorld());
         await player.inventory.add(makeItem("potion", ItemCategory.Consumables), 2);
         assert.equal(await Promise.resolve(player.inventory.use("potion", 1)), true);
         assert.equal(await totalQuantity(player, "potion"), 1);
     });
 
-    it("grants the configured starter items to new players", { todo: "M2 starterItems is configured but never granted" }, async () => {
-        const player = await spawn(createWorld());
+    it("grants the configured starter items to new players", async () => {
+        const player = await spawn(createWorld({ premadeItems: true }));
         assert.equal(await totalQuantity(player, "health_potion"), 3);
         assert.equal(await totalQuantity(player, "rusty_sword"), 1);
     });

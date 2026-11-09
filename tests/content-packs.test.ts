@@ -59,9 +59,11 @@ const startPack = (): ContentPack => ({ id: "test:start", classes: [necromancer]
 const emptyWorld = (options: Parameters<typeof createWorld>[0] = {}) => createWorld({ premadeContent: false, ...options });
 
 describe("Official content is a set of ordinary packs", () => {
-    it("loads the five official packs by default", () => {
+    it("loads the five official packs by default (the items pack is opt-in)", () => {
         const world = createWorld();
-        assert.deepEqual(world.content.list().map((pack) => pack.id).slice(0, 5), Object.values(OFFICIAL_PACK_IDS));
+        // Rationale: the items and achievements packs are opt-in (see `premadeItems`, `premadeAchievements`, `loadOfficialPack`).
+        const { items: _items, achievements: _achievements, ...defaultPacks } = OFFICIAL_PACK_IDS;
+        assert.deepEqual(world.content.list().map((pack) => pack.id).slice(0, 5), Object.values(defaultPacks));
         assert.equal(world.enemies.size, OFFICIAL_ENEMIES.length);
         assert.equal(world.classes.size, 3);
         assert.equal(world.jobs.size, 3);
@@ -88,7 +90,8 @@ describe("Official content is a set of ordinary packs", () => {
 
     it("builds fresh official packs on every call", () => {
         const [first, second] = [createOfficialPacks(), createOfficialPacks()];
-        assert.notEqual(first.at(-1)?.locations?.[0], second.at(-1)?.locations?.[0]);
+        const mapOf = (packs: ReturnType<typeof createOfficialPacks>) => packs.find((pack) => pack.id === OFFICIAL_PACK_IDS.map);
+        assert.notEqual(mapOf(first)?.locations?.[0], mapOf(second)?.locations?.[0]);
     });
 });
 
@@ -289,7 +292,7 @@ describe("Third-party content in play", () => {
         const world = createWorld({ packs: [{ id: "p", enemies: [fireImp] }] });
         const player = await spawn(world);
         stubRandom(t, 0);
-        const result = await travel(t, player, "Ironmill", 1, 1);
+        const result = await travel(t, player, "Embercross", 1, 1);
         assert.equal(defined(result.enemy).type, fireImp.id, "order -1 puts the imp first in the land ambush pool");
         assert.equal(defined(result.enemy).name, "Mypack:fire_imp");
     });

@@ -1,3 +1,4 @@
+import { ACHIEVEMENT_SNAPSHOT_VERSION } from "../achievements/achievement.types.js";
 import {
   CreatePlayerOptions,
   PlayerCount,
@@ -87,10 +88,14 @@ export default class PlayerManager {
       playerData.bestiary,
       playerData.jobs,
       playerData.deadUntil ?? null,
+      playerData.effects,
     );
 
+    this.restoreAchievements(playerData.id, playerData.achievements);
     await playerInstance.inventory.load();
     this.activePlayersMap.set(playerData.id, playerInstance);
+    // Credits the ticks and expirations that elapsed while the player was unloaded.
+    await playerInstance.effects.sync();
     this.refreshUnloadTimer(playerData.id);
     consola.debug(`Player ${playerData.id} loaded into cache.`);
     await this.world.events.emitAsync("playerLoad", {
@@ -225,6 +230,8 @@ export default class PlayerManager {
     // The cached instance is the one listeners and stale references know: keep it for the cleanup and the event.
     const cachedPlayer = this.activePlayersMap.get(playerId);
     cachedPlayer?.life.dispose();
+    cachedPlayer?.effects.dispose();
+    this.world.achievements.reset(playerId);
     this.activePlayersMap.delete(playerId);
     const player = cachedPlayer ?? (await this.get(playerId));
     if (!player) {
@@ -276,6 +283,8 @@ export default class PlayerManager {
     await this.save(playerInstance);
     this.clearUnloadTimer(playerId);
     playerInstance.life.dispose();
+    playerInstance.effects.dispose();
+    this.world.achievements.reset(playerId);
     this.activePlayersMap.delete(playerId);
     await this.world.events.emitAsync("playerUnload", {
       playerId,
@@ -305,6 +314,26 @@ export default class PlayerManager {
     this.unloadTimersMap.delete(playerId);
   }
 
+  /**
+   * Loads the saved achievements of a player into the achievement manager.
+   * A corrupted save is logged and skipped: it must never prevent the player from loading.
+   */
+  private restoreAchievements(
+    playerId: string,
+    achievements: PlayerData["achievements"],
+  ): void {
+    if (!achievements || Object.keys(achievements).length === 0) return;
+    try {
+      this.world.achievements.importPlayer({
+        version: ACHIEVEMENT_SNAPSHOT_VERSION,
+        playerId,
+        achievements,
+      });
+    } catch (error) {
+      consola.warn(`Ignoring the unreadable achievements of ${playerId}.`, error);
+    }
+  }
+
   public async save(playerInstance: Player): Promise<void> {
     const playerData: PlayerData = {
       id: playerInstance.id,
@@ -329,6 +358,8 @@ export default class PlayerManager {
       bestiary: playerInstance.bestiary.toState(),
       jobs: playerInstance.jobs.toState(),
       deadUntil: playerInstance.life.getPersistedDeadUntil(),
+      effects: playerInstance.effects.toState(),
+      achievements: this.world.achievements.exportPlayer(playerInstance.id).achievements,
     };
 
     const saveResult = this.playerDatabase.save(playerData);

@@ -112,7 +112,7 @@ describe("PlayerManager", () => {
         assert.equal(reloaded.jobs.getEquippedToolId("fishing"), "reload_rod");
     });
 
-    it("restores attributes exactly after an eviction", { todo: "C1 loadPlayerIntoCache passes constructor arguments in the wrong order" }, async () => {
+    it("restores attributes exactly after an eviction", async () => {
         const world = createWorld();
         const player = await spawn(world);
         player.attributes = { points: 3, strength: 10, agility: 4, intelligence: 3, defense: 8 };
@@ -155,7 +155,7 @@ describe("PlayerManager", () => {
         assert.equal(world.players.count().total, 0);
     });
 
-    it("delete leaves no trace in the cache", { todo: "C6 delete() reloads the player through get() and leaves a ghost in the cache" }, async () => {
+    it("delete leaves no trace in the cache", async () => {
         const world = createWorld();
         const player = await spawn(world);
         await world.players.delete(player.id);

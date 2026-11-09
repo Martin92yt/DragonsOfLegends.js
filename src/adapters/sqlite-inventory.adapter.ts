@@ -12,7 +12,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { InventoryEntity } from "../inventory/inventory.js";
 import { PlayerData } from "../player/player.interface.js";
-import { EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
+import { EQUIPMENT_RECORD_KEYS, EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
 
 interface InventoryRow {
     playerId: string;
@@ -32,8 +32,6 @@ interface EquipmentRow {
     equipmentSlot: EquipmentSlot;
     itemId: string;
 }
-
-type EquipmentKey = Exclude<keyof EquipmentRecord, "playerId">;
 
 export default class SqliteInventoryAdapter {
     private readonly databaseInstance: Database.Database;
@@ -86,7 +84,7 @@ export default class SqliteInventoryAdapter {
                         itemRecord.itemId,
                         itemRecord.quantity,
                         itemRecord.itemNbtData ? JSON.stringify(itemRecord.itemNbtData) : null,
-                        itemRecord.name || itemRecord.itemId ? itemRecord.itemId : "Unknown Item",
+                        itemRecord.name || itemRecord.itemId || "Unknown Item",
                         itemRecord.category || ItemCategory.Valuables,
                         itemRecord.rarity || ItemRarity.Common,
                         itemRecord.maxStack ?? 64,
@@ -133,7 +131,7 @@ export default class SqliteInventoryAdapter {
 
         for (const equipmentRow of equipmentRows) {
             if (SqliteInventoryAdapter.VALID_SLOTS.has(equipmentRow.equipmentSlot)) {
-                playerEquipmentRecord[equipmentRow.equipmentSlot as EquipmentKey] = equipmentRow.itemId;
+                playerEquipmentRecord[EQUIPMENT_RECORD_KEYS[equipmentRow.equipmentSlot as EquipmentSlot]] = equipmentRow.itemId;
             }
         }
 

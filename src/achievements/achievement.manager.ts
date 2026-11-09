@@ -11,6 +11,7 @@ import {
   AchievementDefinition,
   AchievementDump,
   AchievementProgressView,
+  AchievementReward,
   AchievementSerializationError,
   CriterionSpec,
   DuplicateAchievementError,
@@ -98,6 +99,32 @@ export class AchievementManager {
   /** Définition d'un succès. @throws {@link UnknownAchievementError} */
   public get(achievementId: string): AchievementDefinition {
     return this.requireDefinition(achievementId);
+  }
+
+  /** `true` si un succès avec cet identifiant est enregistré. */
+  public has(achievementId: string): boolean {
+    return this.definitions.has(achievementId);
+  }
+
+  /**
+   * Retire un succès (et la progression qui lui est liée). Sert à annuler le chargement d'un pack.
+   *
+   * @returns `false` si le succès n'était pas enregistré.
+   */
+  public unregister(achievementId: string): boolean {
+    if (!this.definitions.delete(achievementId)) return false;
+    for (const [event, list] of this.byEvent) {
+      const remaining = list.filter((criterion) => criterion.achievementId !== achievementId);
+      if (remaining.length > 0) {
+        this.byEvent.set(event, remaining);
+        continue;
+      }
+      this.byEvent.delete(event);
+      this.subscriptions.get(event)?.();
+      this.subscriptions.delete(event);
+    }
+    for (const perPlayer of this.players.values()) perPlayer.delete(achievementId);
+    return true;
   }
 
   /** Toutes les définitions enregistrées. */
@@ -197,6 +224,7 @@ export class AchievementManager {
         progress: { ...state.progress },
         unlockedAt: state.unlockedAt,
         rewardsGranted: state.rewardsGranted,
+        ...(state.rewardsApplied ? { rewardsApplied: state.rewardsApplied } : {}),
       };
     }
     return { version: ACHIEVEMENT_SNAPSHOT_VERSION, playerId, achievements };
@@ -231,6 +259,7 @@ export class AchievementManager {
         progress,
         unlockedAt: saved.unlockedAt,
         rewardsGranted: saved.rewardsGranted,
+        ...(saved.rewardsApplied ? { rewardsApplied: saved.rewardsApplied } : {}),
       });
     }
     this.players.set(parsed.playerId, restored);
@@ -407,8 +436,11 @@ export class AchievementManager {
     }
     if (!this.rewardHandler) return false;
     try {
-      for (const reward of rewards)
-        await this.rewardHandler(playerId, reward, definition);
+      // Rationale: resume after the last applied reward, so a retry never pays the same reward twice.
+      for (let index = state.rewardsApplied ?? 0; index < rewards.length; index++) {
+        await this.rewardHandler(playerId, rewards[index] as AchievementReward, definition);
+        state.rewardsApplied = index + 1;
+      }
       state.rewardsGranted = true;
       return true;
     } catch (error) {

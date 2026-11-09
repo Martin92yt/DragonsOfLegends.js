@@ -14,6 +14,19 @@ export interface ItemNBT {
 }
 
 /**
+ * What happens when a consumable item is used (see `InventoryEntity.use`).
+ * At least one field is required; every field can be combined.
+ */
+export interface ItemUse {
+    /** Instant healing, in health points (capped at the maximum health). */
+    readonly heal?: number;
+    /** Identifiers of the effects (see `EffectDefinition`) applied to the player, in order. */
+    readonly effects?: readonly string[];
+    /** Identifier of the lootbox (see `LootboxDefinition`) opened by the item. */
+    readonly lootbox?: string;
+}
+
+/**
  * Represents the core definition and static properties of an item.
  */
 export interface Item {
@@ -23,6 +36,13 @@ export interface Item {
     readonly rarity: ItemRarity;
     readonly maxStack?: number;
     readonly description?: string;
+    /**
+     * Item data given to every new instance that is added without explicit data
+     * (e.g. the damage and durability of a weapon, the modifiers of an amulet).
+     */
+    readonly defaultNbt?: ItemNBT;
+    /** Built-in behaviour of a consumable (heal, effects, lootbox). Resolved from the item registry when the item is used. */
+    readonly use?: ItemUse;
 }
 
 /**
@@ -73,3 +93,18 @@ export interface EquipmentRecord {
     amuletTwoItemId: string | null;
     amuletThreeItemId: string | null;
 }
+
+/**
+ * Field of {@link EquipmentRecord} that holds the item worn in each equipment slot.
+ */
+export const EQUIPMENT_RECORD_KEYS: Readonly<Record<EquipmentSlot, Exclude<keyof EquipmentRecord, "playerId">>> = {
+    helmet: "helmetItemId",
+    chest: "chestItemId",
+    leggings: "leggingsItemId",
+    boots: "bootsItemId",
+    sword: "swordItemId",
+    shield: "shieldItemId",
+    amulet1: "amuletOneItemId",
+    amulet2: "amuletTwoItemId",
+    amulet3: "amuletThreeItemId"
+};

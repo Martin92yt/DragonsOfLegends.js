@@ -34,7 +34,9 @@ describe("SqlitePlayerAdapter", () => {
             equippedTitleId: "gilded_purse",
             bestiary: { slime: { kills: 3, firstDefeatedAt: 1000 } },
             jobs: { fishing: { level: 2, xp: 5, equippedToolItemId: "wooden_fishing_rod", lastActionAt: { fish: 123 } } },
-            deadUntil: 1_900_000_000_000
+            deadUntil: 1_900_000_000_000,
+            effects: { regeneration: { appliedAt: 1_000, expiresAt: 61_000, lastTickAt: 5_000 } },
+            achievements: { first_blood: { progress: { kills: 1 }, unlockedAt: 2_000, rewardsGranted: true } }
         };
         adapter.save({ ...sample, ...extras });
         assert.deepEqual(adapter.get(sample.id), { ...sample, ...extras });
@@ -133,7 +135,7 @@ describe("SqliteInventoryAdapter", () => {
         assert.equal(stored.equipmentSlot, "sword");
     });
 
-    it("keeps the display name", { todo: "C4 name column is always filled with the itemId" }, async () => {
+    it("keeps the display name", async () => {
         const { adapter } = await adapterFor("inv-2.db");
         adapter.savePlayerInventory("inv-owner", [record]);
         assert.equal(adapter.getPlayerInventory("inv-owner")[0].name, "Relic");
