@@ -58,6 +58,10 @@ export interface DamageResult {
     currentHealth: number;
     /** The initial unmitigated damage value. */
     rawDamage: number;
+    /** `true` when a `playerDamage` listener cancelled the damage: nothing was applied (`reducedDamage` is 0). */
+    cancelled?: boolean;
+    /** The reason given by the listener that cancelled the damage, if any. */
+    cancelReason?: string;
 }
 
 /**

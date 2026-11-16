@@ -24,7 +24,7 @@ describe("SqlitePlayerAdapter", () => {
     const sample: PlayerData = {
         id: "adapter-1", name: "Ada", classId: PlayerClass.Explorer, locationId: "Embercross", level: 3, experience: 42, health: 50,
         maxHealth: 120, partnerId: "", attributePoints: 2, strength: 7, agility: 8, intelligence: 9, defense: 6, gold: 321, bankGold: 654,
-        bankUnlocked: true
+        bankUnlocked: true, bankLevel: 3, farm: { "0": { cropId: "wheat", plantedAt: 1, readyAt: 2 } }
     };
 
     it("round-trips every field and upserts on conflict", () => {

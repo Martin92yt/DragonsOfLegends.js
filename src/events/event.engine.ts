@@ -11,6 +11,75 @@
 /** Contrainte d'une table d'événements : chaque payload est un objet. */
 export type EventMapConstraint<TEvents> = { [K in keyof TEvents]: object };
 
+/**
+ * Partie annulable d'un événement.
+ *
+ * Un événement annulable est émis **avant** que l'action soit appliquée : si un écouteur appelle
+ * {@link CancellableEvent.cancel}, l'action n'a pas lieu (ou prend sa variante « annulée »,
+ * par exemple le joueur survit à sa mort). L'annulation est définitive : un événement annulé ne peut pas être rétabli.
+ */
+export interface CancellableEvent {
+    /** `true` dès qu'un écouteur a annulé l'événement. */
+    readonly isCancelled: boolean;
+    /** Raison fournie par l'écouteur qui a annulé l'événement (la première raison est conservée). */
+    readonly cancelReason: string | undefined;
+    /**
+     * Annule l'événement. Idempotent : seul le premier appel (et sa raison) compte.
+     *
+     * @param reason Raison optionnelle, restituée par `cancelReason` et par les résultats des API.
+     */
+    cancel(reason?: string): void;
+}
+
+/** Payload `T` rendu annulable. */
+export type Cancellable<T extends object> = T & CancellableEvent;
+
+/** Données d'un événement annulable, sans les membres d'annulation (ajoutés par le moteur). */
+export type CancellablePayload<T> = Omit<T, keyof CancellableEvent>;
+
+/** Noms des événements d'une table dont le payload est annulable. */
+export type CancellableEventName<TEvents> = {
+    [K in keyof TEvents]: TEvents[K] extends CancellableEvent ? K : never;
+}[keyof TEvents];
+
+/**
+ * Rend un payload annulable : copie ses propriétés et ajoute `cancel()`, `isCancelled` et `cancelReason`.
+ *
+ * @param payload Les données de l'événement.
+ * @returns Un nouvel objet annulable (le payload d'origine n'est pas modifié).
+ *
+ * @example
+ * ```ts
+ * const event = createCancellable({ playerId: "p1" });
+ * event.cancel("not allowed");
+ * event.isCancelled; // true
+ * ```
+ */
+export function createCancellable<T extends object>(payload: T): Cancellable<T> {
+    let cancelled = false;
+    let reason: string | undefined;
+    const event = { ...payload };
+    Object.defineProperties(event, {
+        // Rationale: getters only, so a listener cannot un-cancel an event by assignment.
+        isCancelled: { get: () => cancelled, enumerable: true },
+        cancelReason: { get: () => reason, enumerable: true },
+        cancel: {
+            value: (why?: string): void => {
+                if (cancelled) return;
+                cancelled = true;
+                reason = why;
+            },
+            enumerable: false
+        }
+    });
+    return event as Cancellable<T>;
+}
+
+/** Indique si un payload porte l'état « annulé ». */
+function isCancelledPayload(payload: unknown): boolean {
+    return typeof payload === "object" && payload !== null && (payload as { isCancelled?: unknown }).isCancelled === true;
+}
+
 /** Fonction de désabonnement renvoyée par chaque abonnement. */
 export type Unsubscribe = () => void;
 
@@ -37,6 +106,13 @@ export interface ListenerOptions<TPayload> {
     readonly filter?: (payload: TPayload) => boolean;
     /** Désabonne l'écouteur lorsque le signal est avorté. */
     readonly signal?: AbortSignal;
+    /**
+     * Ignore l'événement s'il est déjà annulé au moment où l'écouteur va s'exécuter
+     * (un écouteur de priorité supérieure l'a annulé pendant la même émission).
+     * Sans effet sur les événements non annulables.
+     * @defaultValue false
+     */
+    readonly ignoreCancelled?: boolean;
 }
 
 /** Options de `waitFor`. */
@@ -98,6 +174,7 @@ interface Registration<TPayload, TListener> {
     readonly once: boolean;
     readonly priority: number;
     readonly filter: ((payload: TPayload) => boolean) | undefined;
+    readonly ignoreCancelled: boolean;
 }
 
 type AnyRegistration<TEvents> = Registration<AnyEvent<TEvents>, AnyEventListener<TEvents>>;
@@ -145,7 +222,8 @@ export class EventEngine<TEvents extends EventMapConstraint<TEvents>> {
             listener,
             once: options.once ?? false,
             priority: options.priority ?? 0,
-            filter: options.filter
+            filter: options.filter,
+            ignoreCancelled: options.ignoreCancelled ?? false
         };
         const list = this.registrations.get(event) ?? [];
         // Rationale: insertion triée (priorité décroissante, stable) pour éviter un tri à chaque emit.
@@ -174,7 +252,7 @@ export class EventEngine<TEvents extends EventMapConstraint<TEvents>> {
      * @returns Fonction de désabonnement.
      */
     public onAny(listener: AnyEventListener<TEvents>, options: Pick<ListenerOptions<never>, "once" | "signal"> = {}): Unsubscribe {
-        const registration: AnyRegistration<TEvents> = { listener, once: options.once ?? false, priority: 0, filter: undefined };
+        const registration: AnyRegistration<TEvents> = { listener, once: options.once ?? false, priority: 0, filter: undefined, ignoreCancelled: false };
         this.wildcards.push(registration);
         const unsubscribe = (): void => {
             const index = this.wildcards.indexOf(registration);
@@ -235,6 +313,29 @@ export class EventEngine<TEvents extends EventMapConstraint<TEvents>> {
             }
         }
         return delivered;
+    }
+
+    /**
+     * Émet un événement **annulable** et attend les écouteurs (séquentiellement, par priorité décroissante ;
+     * les écouteurs jokers passent en dernier et voient donc l'état d'annulation final).
+     *
+     * Tous les écouteurs s'exécutent, même après une annulation, sauf ceux abonnés avec `ignoreCancelled: true`.
+     * L'appelant décide ensuite d'appliquer l'action ou non selon `isCancelled` sur l'événement renvoyé.
+     *
+     * @param event Nom d'un événement annulable.
+     * @param payload Données de l'événement, sans les membres d'annulation (ajoutés ici).
+     * @returns L'événement livré (annulable), prêt à être inspecté par l'appelant.
+     *
+     * @example
+     * ```ts
+     * const death = await engine.emitCancellable("playerDeath", { playerId, player, mode: "loose", locationId });
+     * if (death.isCancelled) return; // la mort n'a pas lieu
+     * ```
+     */
+    public async emitCancellable<K extends CancellableEventName<TEvents>>(event: K, payload: CancellablePayload<TEvents[K]>): Promise<TEvents[K]> {
+        const cancellable = createCancellable(payload as object) as unknown as TEvents[K];
+        await this.emitAsync(event, cancellable);
+        return cancellable;
     }
 
     /**
@@ -303,7 +404,9 @@ export class EventEngine<TEvents extends EventMapConstraint<TEvents>> {
         for (const registration of list) {
             if (!this.accepts(String(event), registration, payload)) continue;
             if (registration.once) this.remove(event, registration as unknown as Registration<never, never>);
-            runs.push(() => registration.listener(payload));
+            // Rationale: `ignoreCancelled` is evaluated when the listener runs, not when the plan is built,
+            // because a listener that runs earlier in the same emission may cancel the event.
+            runs.push(() => (registration.ignoreCancelled && isCancelledPayload(payload) ? undefined : registration.listener(payload)));
         }
         if (this.wildcards.length === 0) {
             this.logger?.debug(`[events] "${String(event)}" -> ${runs.length} listener(s)`);

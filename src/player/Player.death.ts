@@ -47,7 +47,9 @@ export type DeathResult =
   | { mode: "hardcore"; deleted: boolean }
   | { mode: "cooldown"; cooldownTime: string | number; cooldownMs: number; respawnAt: number }
   | { mode: "loose"; lostGold: number; lostItems: LostItem[] }
-  | { mode: "default"; revived: boolean };
+  | { mode: "default"; revived: boolean }
+  /** A `playerDeath` listener cancelled the death: the player survives with `survivalHealth` health points. */
+  | { mode: "cancelled"; survivalHealth: number; reason?: string };
 
 /**
  * Default loss rate (percent) per rarity.
@@ -114,6 +116,92 @@ export function computeLostQuantity(
 }
 
 /**
+ * A stack the death will take items from, planned before the `playerDeath` event so listeners can see it.
+ */
+interface PlannedStackLoss {
+  readonly item: LostItem;
+  readonly equipped: boolean;
+  /** Serialized item data of the stack, to take from the same stack when the loss is committed. */
+  readonly nbtKey: string;
+}
+
+const nbtKeyOf = (record: InventoryItemRecord): string => JSON.stringify(record.itemNbtData ?? null);
+
+/**
+ * Computes which stacks the death would take items from, without changing anything.
+ *
+ * @param player The player who is about to die.
+ * @param config The resolved configuration.
+ * @param random A random source returning a value in [0, 1).
+ * @returns The planned losses (empty if the feature is disabled or nothing would be lost).
+ */
+async function planDeathItemLoss(
+  player: PlayerEntity,
+  config: ResolvedDeathItemLossConfig,
+  random: () => number,
+): Promise<PlannedStackLoss[]> {
+  if (!config.enabled) return [];
+
+  const planned: PlannedStackLoss[] = [];
+  for (const inventoryItem of await player.inventory.getItems()) {
+    if (config.protectEquipped && inventoryItem.isEquipped) continue;
+
+    const lostQuantity = computeLostQuantity(
+      inventoryItem.quantity,
+      config.lossRates[inventoryItem.rarity],
+      random,
+    );
+    if (lostQuantity <= 0) continue;
+
+    planned.push({
+      item: {
+        itemId: inventoryItem.itemId,
+        name: inventoryItem.name,
+        rarity: inventoryItem.rarity,
+        quantity: lostQuantity,
+      },
+      equipped: inventoryItem.isEquipped === true,
+      nbtKey: nbtKeyOf(inventoryItem),
+    });
+  }
+  return planned;
+}
+
+/**
+ * Takes the planned quantities from the *current* inventory and persists it.
+ * The inventory is read again here: a `playerDeath` listener may have changed it since the plan was made.
+ */
+async function commitDeathItemLoss(
+  player: PlayerEntity,
+  planned: readonly PlannedStackLoss[],
+): Promise<void> {
+  if (planned.length === 0) return;
+
+  const records: InventoryItemRecord[] = await player.inventory.getItems();
+  for (const { item, equipped, nbtKey } of planned) {
+    let remaining = item.quantity;
+    // Same stack first (same item data), then any stack of the item in the same equipped state.
+    const passes: Array<(record: InventoryItemRecord) => boolean> = [
+      (record) => nbtKeyOf(record) === nbtKey,
+      () => true,
+    ];
+    for (const accepts of passes) {
+      for (const record of records) {
+        if (remaining <= 0) break;
+        if (record.itemId !== item.itemId || (record.isEquipped === true) !== equipped || !accepts(record)) continue;
+        const taken = Math.min(record.quantity, remaining);
+        record.quantity -= taken;
+        remaining -= taken;
+      }
+    }
+  }
+
+  // Single save of the whole inventory (empty stacks removed) instead of N remove() calls.
+  await player.inventory.save(records.filter((record) => record.quantity > 0));
+  consola.info(`🎒 ${player.name} lost ${planned.length} item stack(s) on death.`);
+}
+
+/**
  * Applies the item-loss penalty to a dead player and persists the updated inventory.
  *
  * @param player The player who died.
@@ -126,46 +214,17 @@ export async function applyDeathItemLoss(
   config: ResolvedDeathItemLossConfig,
   random: () => number = Math.random,
 ): Promise<LostItem[]> {
-  if (!config.enabled) return [];
-
-  const inventoryItems: InventoryItemRecord[] =
-    await player.inventory.getItems();
-  const lostItems: LostItem[] = [];
-
-  for (const inventoryItem of inventoryItems) {
-    if (config.protectEquipped && inventoryItem.isEquipped) continue;
-
-    const lostQuantity = computeLostQuantity(
-      inventoryItem.quantity,
-      config.lossRates[inventoryItem.rarity],
-      random,
-    );
-    if (lostQuantity <= 0) continue;
-
-    inventoryItem.quantity -= lostQuantity;
-    lostItems.push({
-      itemId: inventoryItem.itemId,
-      name: inventoryItem.name,
-      rarity: inventoryItem.rarity,
-      quantity: lostQuantity,
-    });
-  }
-
-  if (lostItems.length > 0) {
-    // Single save of the whole inventory (empty stacks removed) instead of N remove() calls.
-    await player.inventory.save(
-      inventoryItems.filter((inventoryItem) => inventoryItem.quantity > 0),
-    );
-    consola.info(
-      `🎒 ${player.name} lost ${lostItems.length} item stack(s) on death.`,
-    );
-  }
-
-  return lostItems;
+  const planned = await planDeathItemLoss(player, config, random);
+  await commitDeathItemLoss(player, planned);
+  return planned.map(({ item }) => item);
 }
 
 /**
  * Handles the death mechanics of a player based on world configuration options.
+ *
+ * The death is resolved in three steps: the consequences are *planned* (respawn time, gold and items that would be
+ * lost), the cancellable `playerDeath` event is emitted, then the consequences are *applied* unless a listener
+ * cancelled the event. A cancelled death leaves the player alive with `survivalHealth` health points (1 by default).
  *
  * @param player The player entity that has died.
  * @returns The result of the death processing.
@@ -176,9 +235,54 @@ export async function handlePlayerDeath(
 ): Promise<DeathResult> {
   const worldOptions = player.worldInstance.initializationOptions;
   const deathMode = worldOptions.deathMode ?? "cooldown";
+  const { events, combat, players } = player.worldInstance;
 
   consola.warn(`💀 Player ${player.name} has died! Death Mode: ${deathMode}`);
-  player.worldInstance.combat.clear(player.id);
+
+  if (deathMode !== "hardcore" && deathMode !== "cooldown" && deathMode !== "loose") {
+    // Unknown mode: immediate revival, no event (there is no consequence to cancel).
+    combat.clear(player.id);
+    player.health.current = player.health.max;
+    return { mode: "default", revived: true };
+  }
+
+  // 1. Plan: compute what the death would do, without changing anything.
+  const cooldownTime = worldOptions.deathCooldown ?? "1m";
+  const cooldownMs = deathMode === "cooldown" ? parseDuration(cooldownTime) : 0;
+  const plannedRespawnAt = deathMode === "cooldown" ? Date.now() + cooldownMs : undefined;
+  const penaltyRate = worldOptions.deathPenaltyRate ?? 5; // ex: 5%
+  const plannedGoldLoss = deathMode === "loose" ? Math.floor(player.gold * (penaltyRate / 100)) : undefined;
+  const plannedItemLoss = deathMode === "loose"
+    ? await planDeathItemLoss(player, resolveDeathItemLossConfig(worldOptions.deathItemLoss), Math.random)
+    : [];
+
+  // 2. Ask the listeners: nothing has been applied yet, so a cancellation leaves the player untouched.
+  const event = await events.emitCancellable("playerDeath", {
+    playerId: player.id,
+    player,
+    mode: deathMode,
+    locationId: player.location,
+    ...(plannedRespawnAt !== undefined ? { respawnAt: plannedRespawnAt } : {}),
+    ...(plannedGoldLoss !== undefined ? { lostGold: plannedGoldLoss, lostItems: plannedItemLoss.map(({ item }) => item) } : {}),
+    survivalHealth: 1,
+  });
+
+  if (event.isCancelled) {
+    const requested = Number.isFinite(event.survivalHealth) ? Math.floor(event.survivalHealth) : 1;
+    const survivalHealth = Math.min(player.health.max, Math.max(1, requested));
+    player.health.current = survivalHealth;
+    consola.info(
+      `🛡️ Death of ${player.name} cancelled${event.cancelReason ? ` (${event.cancelReason})` : ""}: survives with ${survivalHealth} health.`,
+    );
+    return {
+      mode: "cancelled",
+      survivalHealth,
+      ...(event.cancelReason !== undefined ? { reason: event.cancelReason } : {}),
+    };
+  }
+
+  // 3. Apply.
+  combat.clear(player.id);
 
   switch (deathMode) {
     case "hardcore": {
@@ -187,49 +291,34 @@ export async function handlePlayerDeath(
       consola.error(
         `🔥 Hardcore death: ${player.name} has lost everything permanently.`,
       );
-      await player.worldInstance.events.emitAsync("playerDeath", { playerId: player.id, player, mode: "hardcore", locationId: player.location });
       // Pas de save() après delete() : il recréerait le joueur supprimé en base.
-      await player.worldInstance.players.delete(player.id);
+      await players.delete(player.id);
       return { mode: "hardcore", deleted: true };
     }
 
     case "cooldown": {
-      const cooldownTime = worldOptions.deathCooldown ?? "1m";
-      const cooldownMs = parseDuration(cooldownTime);
       // From now on, every player action is refused until `respawnAt` (see PlayerLife.assertCanAct).
-      const respawnAt = player.life.die(cooldownMs);
+      const respawnAt = player.life.die(Math.max(0, (plannedRespawnAt ?? Date.now()) - Date.now()));
       consola.info(
         `⏳ ${player.name} is dead and resting. Cooldown: ${cooldownTime}`,
       );
       // Persisted right away so the lock survives a restart or an eviction from the cache.
-      await player.worldInstance.players.save(player);
-      await player.worldInstance.events.emitAsync("playerDeath", { playerId: player.id, player, mode: "cooldown", locationId: player.location, respawnAt });
+      await players.save(player);
       return { mode: "cooldown", cooldownTime, cooldownMs, respawnAt };
     }
 
     case "loose": {
-      const penaltyRate = worldOptions.deathPenaltyRate ?? 5; // ex: 5%
-      const lostGold = Math.floor(player.gold * (penaltyRate / 100));
-
+      const lostGold = Math.min(player.gold, plannedGoldLoss ?? 0);
       player.gold = Math.max(0, player.gold - lostGold);
       player.health.current = player.health.max; // Réanimation directe avec pénalité
 
-      const lostItems = await applyDeathItemLoss(
-        player,
-        resolveDeathItemLossConfig(worldOptions.deathItemLoss),
-      );
+      await commitDeathItemLoss(player, plannedItemLoss);
 
       consola.info(
-        `💸 Loose death: ${player.name} lost ${lostGold} gold (${penaltyRate}% penalty) and ${lostItems.length} item stack(s).`,
+        `💸 Loose death: ${player.name} lost ${lostGold} gold (${penaltyRate}% penalty) and ${plannedItemLoss.length} item stack(s).`,
       );
-      await player.worldInstance.players.save(player);
-      await player.worldInstance.events.emitAsync("playerDeath", { playerId: player.id, player, mode: "loose", locationId: player.location, lostGold, lostItems });
-      return { mode: "loose", lostGold, lostItems };
-    }
-
-    default: {
-      player.health.current = player.health.max;
-      return { mode: "default", revived: true };
+      await players.save(player);
+      return { mode: "loose", lostGold, lostItems: plannedItemLoss.map(({ item }) => item) };
     }
   }
 }

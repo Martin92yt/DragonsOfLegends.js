@@ -89,6 +89,8 @@ export default class PlayerManager {
       playerData.jobs,
       playerData.deadUntil ?? null,
       playerData.effects,
+      playerData.bankLevel ?? 0,
+      playerData.farm,
     );
 
     this.restoreAchievements(playerData.id, playerData.achievements);
@@ -353,6 +355,8 @@ export default class PlayerManager {
       gold: playerInstance.gold,
       bankGold: playerInstance.bankGold,
       bankUnlocked: playerInstance.bankUnlocked,
+      bankLevel: playerInstance.bankLevel,
+      farm: playerInstance.farm.toState(),
       titles: playerInstance.titles.getOwnedIds(),
       equippedTitleId: playerInstance.titles.getEquippedId(),
       bestiary: playerInstance.bestiary.toState(),

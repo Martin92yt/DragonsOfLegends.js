@@ -85,6 +85,12 @@ export interface JobDefinition {
     readonly maxLevel?: number;
     /** @defaultValue {@link DEFAULT_JOB_XP_CURVE} */
     readonly xpCurve?: JobXpCurve;
+    /**
+     * A trade without actions of its own: its experience comes from other systems (crafting, enchanting).
+     * Such a job may have an empty `actions` list.
+     * @defaultValue false
+     */
+    readonly passive?: boolean;
     readonly actions: readonly JobActionDefinition[];
     readonly levelRewards?: readonly JobLevelReward[];
 }

@@ -1,3 +1,4 @@
+import { CRAFTING_ITEMS, CRAFTING_JOBS, OFFICIAL_CROPS, OFFICIAL_ENCHANTMENTS, OFFICIAL_RECIPES } from "../crafting/official/official-crafting.js";
 import { OFFICIAL_ACHIEVEMENTS } from "../achievements/official-achievements.js";
 import { OFFICIAL_EFFECTS, OFFICIAL_ITEMS, OFFICIAL_LOOTBOXES, OFFICIAL_SHOPS } from "./official-items.js";
 import { OFFICIAL_ENEMIES } from "../enemy/official-enemies.js";
@@ -15,7 +16,8 @@ export const OFFICIAL_PACK_IDS = {
     jobs: "dol:jobs",
     titles: "dol:titles",
     map: "dol:map",
-    achievements: "dol:achievements"
+    achievements: "dol:achievements",
+    crafting: "dol:crafting"
 } as const;
 
 /**
@@ -47,6 +49,15 @@ export function createOfficialPacks(): ContentPack[] {
             name: "Official achievements",
             dependsOn: [OFFICIAL_PACK_IDS.titles, OFFICIAL_PACK_IDS.items],
             achievements: OFFICIAL_ACHIEVEMENTS
+        },
+        {
+            id: OFFICIAL_PACK_IDS.crafting,
+            name: "Official crafting: farmer, blacksmith and enchanter",
+            items: CRAFTING_ITEMS,
+            jobs: CRAFTING_JOBS,
+            recipes: OFFICIAL_RECIPES,
+            crops: OFFICIAL_CROPS,
+            enchantments: OFFICIAL_ENCHANTMENTS
         }
     ];
 }

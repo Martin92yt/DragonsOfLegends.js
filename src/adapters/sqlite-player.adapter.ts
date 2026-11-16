@@ -79,6 +79,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 gold: playerRecord.gold,
                 bankGold: playerRecord.bankGold ?? 0,
                 bankUnlocked: Boolean(playerRecord.bankUnlocked),
+                bankLevel: playerRecord.bankLevel ?? 0,
+                farm: playerRecord.farm,
                 titles: playerRecord.titles,
                 equippedTitleId: playerRecord.equippedTitleId,
                 bestiary: playerRecord.bestiary,
@@ -152,6 +154,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 LocationId TEXT NOT NULL DEFAULT '',
                 BankGold INTEGER NOT NULL DEFAULT 0,
                 BankUnlocked INTEGER NOT NULL DEFAULT 0,
+                BankLevel INTEGER NOT NULL DEFAULT 0,
+                Farm TEXT NOT NULL DEFAULT '{}',
                 Titles TEXT NOT NULL DEFAULT '[]',
                 EquippedTitle TEXT NOT NULL DEFAULT '',
                 Bestiary TEXT NOT NULL DEFAULT '{}',
@@ -202,6 +206,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
         const migrationQueries: Record<string, string> = {
             BankGold: "ALTER TABLE Player ADD COLUMN BankGold INTEGER NOT NULL DEFAULT 0",
             BankUnlocked: "ALTER TABLE Player ADD COLUMN BankUnlocked INTEGER NOT NULL DEFAULT 0",
+            BankLevel: "ALTER TABLE Player ADD COLUMN BankLevel INTEGER NOT NULL DEFAULT 0",
+            Farm: "ALTER TABLE Player ADD COLUMN Farm TEXT NOT NULL DEFAULT '{}'",
             Titles: "ALTER TABLE Player ADD COLUMN Titles TEXT NOT NULL DEFAULT '[]'",
             EquippedTitle: "ALTER TABLE Player ADD COLUMN EquippedTitle TEXT NOT NULL DEFAULT ''",
             Bestiary: "ALTER TABLE Player ADD COLUMN Bestiary TEXT NOT NULL DEFAULT '{}'",
@@ -257,8 +263,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
     private savePlayer(playerData: PlayerData): void {
         this.databaseInstance
             .prepare(`
-                INSERT INTO Player (Name, Identifier, Class, LocationId, Gold, BankGold, BankUnlocked, Titles, EquippedTitle, Bestiary, Jobs, DeadUntil, Effects, Achievements)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO Player (Name, Identifier, Class, LocationId, Gold, BankGold, BankUnlocked, BankLevel, Farm, Titles, EquippedTitle, Bestiary, Jobs, DeadUntil, Effects, Achievements)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(Identifier)
                 DO UPDATE SET
                     Name = excluded.Name,
@@ -267,6 +273,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                     Gold = excluded.Gold,
                     BankGold = excluded.BankGold,
                     BankUnlocked = excluded.BankUnlocked,
+                    BankLevel = excluded.BankLevel,
+                    Farm = excluded.Farm,
                     Titles = excluded.Titles,
                     EquippedTitle = excluded.EquippedTitle,
                     Bestiary = excluded.Bestiary,
@@ -278,7 +286,8 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
             .run(
                 playerData.name, playerData.id, playerData.classId,
                 playerData.locationId, playerData.gold, playerData.bankGold ?? 0,
-                playerData.bankUnlocked ? 1 : 0,
+                playerData.bankUnlocked ? 1 : 0, playerData.bankLevel ?? 0,
+                JSON.stringify(playerData.farm ?? {}),
                 JSON.stringify(playerData.titles ?? []), playerData.equippedTitleId ?? "",
                 JSON.stringify(playerData.bestiary ?? {}), JSON.stringify(playerData.jobs ?? {}),
                 playerData.deadUntil ?? 0, // 0 = alive
@@ -292,23 +301,23 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
             .prepare(`
                 SELECT Name AS name, Identifier AS id, Class AS classId,
                        LocationId AS locationId, Gold AS gold, BankGold AS bankGold,
-                       BankUnlocked AS bankUnlocked, Titles AS titles, EquippedTitle AS equippedTitleId,
+                       BankUnlocked AS bankUnlocked, BankLevel AS bankLevel, Farm AS farm, Titles AS titles, EquippedTitle AS equippedTitleId,
                        Bestiary AS bestiary, Jobs AS jobs, DeadUntil AS deadUntil, Effects AS effects, Achievements AS achievements
                 FROM Player WHERE Identifier = ?
             `)
-            .get(playerId) as { name: string; id: string; classId: PlayerData["classId"]; locationId: string; gold: number; bankGold: number; bankUnlocked: number; titles: string; equippedTitleId: string; bestiary: string; jobs: string; deadUntil: number; effects: string; achievements: string } | undefined;
+            .get(playerId) as { name: string; id: string; classId: PlayerData["classId"]; locationId: string; gold: number; bankGold: number; bankUnlocked: number; bankLevel: number; farm: string; titles: string; equippedTitleId: string; bestiary: string; jobs: string; deadUntil: number; effects: string; achievements: string } | undefined;
 
         if (!rawRecord) return undefined;
 
-        return { ...rawRecord, bankUnlocked: Boolean(rawRecord.bankUnlocked), titles: SqlitePlayerAdapter.parseTitleIds(rawRecord.titles), bestiary: parseBestiaryState(SqlitePlayerAdapter.parseJson(rawRecord.bestiary)), jobs: parsePlayerJobsState(SqlitePlayerAdapter.parseJson(rawRecord.jobs)), deadUntil: rawRecord.deadUntil > 0 ? rawRecord.deadUntil : null, effects: parsePlayerEffectsState(SqlitePlayerAdapter.parseJson(rawRecord.effects)), achievements: SqlitePlayerAdapter.parseAchievements(rawRecord.achievements) };
+        return { ...rawRecord, bankUnlocked: Boolean(rawRecord.bankUnlocked), farm: SqlitePlayerAdapter.parseObject(rawRecord.farm), titles: SqlitePlayerAdapter.parseTitleIds(rawRecord.titles), bestiary: parseBestiaryState(SqlitePlayerAdapter.parseJson(rawRecord.bestiary)), jobs: parsePlayerJobsState(SqlitePlayerAdapter.parseJson(rawRecord.jobs)), deadUntil: rawRecord.deadUntil > 0 ? rawRecord.deadUntil : null, effects: parsePlayerEffectsState(SqlitePlayerAdapter.parseJson(rawRecord.effects)), achievements: SqlitePlayerAdapter.parseAchievements(rawRecord.achievements) };
     }
 
-    /**
-     * Parses a JSON column into an unknown value that callers must validate.
-     *
-     * @param serialized The raw JSON string.
-     * @returns The parsed value, or undefined if the JSON is corrupted.
-     */
+    /** Reads a saved JSON object (an empty object when it is unreadable). */
+    private static parseObject(serialized: string): Record<string, never> {
+        const parsed: unknown = SqlitePlayerAdapter.parseJson(serialized);
+        return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, never>) : {};
+    }
+
     /**
      * Reads the saved achievements. The structure is validated when they are imported by the achievement manager.
      */
@@ -317,6 +326,12 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
         return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, PlayerAchievementState>) : {};
     }
 
+    /**
+     * Parses a JSON column into an unknown value that callers must validate.
+     *
+     * @param serialized The raw JSON string.
+     * @returns The parsed value, or undefined if the JSON is corrupted.
+     */
     private static parseJson(serialized: string): unknown {
         try {
             return JSON.parse(serialized);

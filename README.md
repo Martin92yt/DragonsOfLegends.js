@@ -215,6 +215,17 @@ world.achievements.getProgress(player.id, "slime_slayer");
 
 Event names follow one convention: `<subject><Verb>` in camelCase. They are emitted **after** the action succeeds, and each payload carries the entities involved.
 
+**Cancellable events** are the exception: they are emitted **before** the action is applied and their payload has `cancel(reason?)` and `isCancelled`. Cancelling stops the action and nothing is consumed. Listeners that must ignore already-cancelled events can register with `{ ignoreCancelled: true }`.
+
+```ts
+// A guardian angel: the player survives lethal blows with 1 HP (set `survivalHealth` for more).
+world.events.on("playerDeath", (event) => {
+    if (hasGuardianAngel(event.player)) event.cancel("guardian angel");
+});
+```
+
+Cancellable: `playerDamage`, `playerDeath`, `bankUpgrade`, `itemCraft`, `itemEnchant`, `cropPlant`, `cropHarvest`.
+
 ```ts
 world.events.on("playerLevelUp", ({ player, previousLevel, level }) => { /* ... */ });
 world.events.on("itemEquip", ({ player, itemId, slot }) => { /* ... */ }, { priority: 10 });
@@ -225,13 +236,30 @@ const { result } = await world.events.waitFor("combatTurn", { timeoutMs: 5_000 }
 | Subject | Events |
 | --- | --- |
 | World | `worldLaunch`, `contentPackLoad` |
-| Player | `playerCreate`, `playerLoad`, `playerUnload`, `playerDelete`, `playerExperienceGain`, `playerLevelUp`, `playerAttributeUpgrade`, `playerGoldChange`, `playerDamage`, `playerDeath`, `playerRevive` |
+| Player | (cancellable: `playerDamage`, `playerDeath`) `playerCreate`, `playerLoad`, `playerUnload`, `playerDelete`, `playerExperienceGain`, `playerLevelUp`, `playerAttributeUpgrade`, `playerGoldChange`, `playerDamage`, `playerDeath`, `playerRevive` |
 | Travel | `travelStart`, `travelComplete`, `travelAmbush` |
 | Combat | `combatStart`, `combatTurn`, `combatEnd`, `enemyDefeat` |
 | Inventory | `itemAdd`, `itemRemove`, `itemEquip`, `itemUnequip`, `itemSell` |
-| Banks | `bankUnlock`, `bankDeposit`, `bankWithdraw`, `itemBankDeposit`, `itemBankWithdraw` |
+| Banks | `bankUpgrade` (cancellable), `bankUnlock`, `bankDeposit`, `bankWithdraw`, `itemBankDeposit`, `itemBankWithdraw` |
+| Crafting | `itemCraft`, `itemEnchant` (cancellable), `itemRepair`, `cropPlant`, `cropHarvest` (cancellable) |
 | Jobs | `jobAction`, `jobLevelUp`, `jobToolEquip`, `jobToolUnequip` |
 | Progression | `titleGrant`, `titleRevoke`, `titleEquip`, `titleUnequip`, `marriageStart`, `marriageDivorce`, `bestiaryDiscover`, `achievementProgress`, `achievementUnlock` |
+
+### Bank upgrades
+
+`world.bank.upgrade(player)` raises the gold ceiling and the item slots of a player's bank for a price that grows with each level (`cost = baseCost * costGrowth ** level`). Configure it with the `bankUpgrades` world option (`baseCost`, `costGrowth`, `goldLimitPerLevel`, `slotsPerLevel`, `maxLevel`). The level is saved with the player.
+
+### Classes
+
+A class definition can declare `passives`: `damagePercent`, `critRateBonus`, `critMultiplierBonus`, `defensePercent`, `xpPercent`, `luckPercent`, per-job experience affinities (`jobXpPercent`) and equipment affinities (`equipmentAffinity: { weaponPercent, armorPercent }`).
+
+### Professions: farmer, blacksmith, enchanter
+
+Opt-in with `officialPack: true`, `premadeCrafting: true` or `world.loadOfficialPack()`; every piece is data you can replace or extend through a content pack (`recipes`, `crops`, `enchantments`, `jobs`).
+
+- **Crafting** (`world.crafting`): generic recipes (`jobId`, `requiredLevel`, ingredients, results). `scaling` makes the crafted stats grow with the job level. `await world.crafting.craft(player, "forge_iron_sword")`.
+- **Farming** (`world.farming`): `plant(player, "wheat", plot)` then, once grown, `harvest(player, plot)`. Growth is shortened by the farmer level, and plots are unlocked as the farmer levels up. Harvests give consumables (healing) and ingredients.
+- **Enchanting** (`world.enchanting`): `enchant(player, { itemId, slot }, "lifesteal")`. Costs items, gold and/or experience and needs the enchanter level. Official enchantments: **Lifesteal** (heals 3% of the enemy's health per blow, per level) and **Mending** (experience gained repairs the worn item). Add your own with `hooks: { onAttack, onExperienceGain }`.
 
 ### Death rules
 

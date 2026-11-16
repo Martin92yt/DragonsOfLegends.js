@@ -16,6 +16,9 @@ import PlayerJobs from "./player.jobs.js";
 import PlayerLife from "./player.life.js";
 import PlayerEffects from "./player.effects.js";
 import { readAmuletModifiers } from "../inventory/amulet.js";
+import PlayerFarm from "../farming/player.farm.js";
+import { ItemCategory } from "../inventory/item.enum.js";
+import { resolveClassPassives, type ResolvedClassPassives } from "./class-passives.js";
 import { resolvePlayerModifiers, scaleExperience, type PlayerModifiers } from "./player.modifiers.js";
 import ItemBank from "../economy/item-bank.js";
 import EnemyEntity from "../enemy/enemy.js";
@@ -51,12 +54,16 @@ export default class PlayerEntity {
     public attributes: PlayerAttributes;
     public bankGold: number;
     public bankUnlocked: boolean;
+    /** Number of bank upgrades bought (0 = base capacity). */
+    public bankLevel: number;
     public readonly inventory: InventoryEntity;
     public marriage: PlayerMarriage;
     public readonly titles: PlayerTitles;
     public readonly itemBank: ItemBank;
     public readonly bestiary: PlayerBestiary;
     public readonly jobs: PlayerJobs;
+    /** The plots and crops of the farmer job. */
+    public readonly farm: PlayerFarm;
     public isTravelling = false;
     public inCombat = false;
     /** Life state: the single source of truth for whether the player can act (see {@link PlayerEntity.assertCanAct}). */
@@ -91,6 +98,8 @@ export default class PlayerEntity {
      * @param jobsState The saved jobs state (validated).
      * @param deadUntil The persisted respawn timestamp (ms), or null if the player is alive.
      * @param effectsState The saved effects state (validated).
+     * @param bankLevel The number of bank upgrades bought.
+     * @param farmState The saved farm state.
      * @returns void
      */
     public constructor(
@@ -117,13 +126,17 @@ export default class PlayerEntity {
         bestiaryState: unknown = {},
         jobsState: unknown = {},
         deadUntil: number | null = null,
-        effectsState: unknown = {}
+        effectsState: unknown = {},
+        bankLevel = 0,
+        farmState: unknown = {}
     ) {
         this.worldInstance = worldInstance;
         this.level = Math.max(1, level);
         this.goldBalance = Math.max(0, gold);
         this.bankGold = Math.max(0, bankGold);
         this.bankUnlocked = bankUnlocked;
+        this.bankLevel = Number.isInteger(bankLevel) && bankLevel > 0 ? bankLevel : 0;
+        this.farm = new PlayerFarm(farmState);
 
         const baseStats = this.generateBaseStats();
 
@@ -323,34 +336,45 @@ export default class PlayerEntity {
             return null;
         }
 
-        // 1. Ajouter 'await' ici
-        const items = await this.inventory.getItems();
-        const { flatDefense, percentDefense } = this.processEquipmentStats(items, damage);
-        
+        const passives = this.getClassPassives();
+        const computed = this.computeEquipmentDefense(await this.inventory.getItems());
+        const flatDefense = computed.flatDefense;
+        const percentDefense = computed.percentDefense + passives.defensePercent / 100;
         const totalDefense = Math.max(0, Math.floor((this.attributes.defense + flatDefense) * (1 + percentDefense)));
         const mitigationFactor = 100 / (100 + totalDefense * 2.5);
         const reducedDamage = Math.max(1, Math.floor(damage * mitigationFactor));
 
-        this.health.current = Math.max(0, this.health.current - reducedDamage);
-        await this.worldInstance.events.emitAsync("playerDamage", {
+        // Cancellable: nothing has been applied yet (neither health nor armor wear), so a cancellation leaves the player untouched.
+        const damageEvent = await this.worldInstance.events.emitCancellable("playerDamage", {
             playerId: this.id,
             player: this,
             rawDamage: damage,
             damage: reducedDamage,
-            health: this.health.current,
+            health: Math.max(0, this.health.current - reducedDamage),
             maxHealth: this.health.max
         });
+        if (damageEvent.isCancelled) {
+            return {
+                reducedDamage: 0,
+                currentHealth: this.health.current,
+                rawDamage: damage,
+                cancelled: true,
+                ...(damageEvent.cancelReason !== undefined ? { cancelReason: damageEvent.cancelReason } : {})
+            };
+        }
+
+        this.health.current = Math.max(0, this.health.current - reducedDamage);
+
+        // Rationale: the inventory is read again after the event, so a listener that changed it (a consumed charge...) is never overwritten.
+        const items = await this.inventory.getItems();
+        this.applyEquipmentWear(items, damage);
+        await this.inventory.save(items);
 
         let deathResult: DeathResult | null = null;
-        
+
         // 🚨 VÉRIFICATION DE LA MORT (Sécurisé avec <= 0)
         if (this.health.current <= 0) {
             deathResult = await handlePlayerDeath(this);
-        }
-
-        // 2. Ne pas réécrire l'instantané `items` après une mort : il écraserait la perte d'objets déjà persistée
-        if (!deathResult) {
-            await this.inventory.save(items);
         }
 
         return {
@@ -426,7 +450,19 @@ export default class PlayerEntity {
      * @returns The experience multiplier, the loot luck and the critical-hit bonus.
      */
     public async getModifiers(): Promise<PlayerModifiers> {
-        return resolvePlayerModifiers(readAmuletModifiers(await this.inventory.getItems()), this.effects.getModifiers());
+        const base = resolvePlayerModifiers(readAmuletModifiers(await this.inventory.getItems()), this.effects.getModifiers());
+        const passives = this.getClassPassives();
+        // The experience bonus of the class multiplies the others; its luck is added.
+        return { ...base, xpMultiplier: base.xpMultiplier * (1 + passives.xpPercent / 100), luckPercent: base.luckPercent + passives.luckPercent };
+    }
+
+    /**
+     * Gets the passive bonuses of the class of the player (no bonus when the class is unknown).
+     *
+     * @returns The resolved class passives.
+     */
+    public getClassPassives(): ResolvedClassPassives {
+        return resolveClassPassives(this.worldInstance.classes.get(this.classId)?.passives);
     }
 
     /**
@@ -530,14 +566,14 @@ export default class PlayerEntity {
     }
 
     /**
-     * Processes equipped item stats and durability changes.
+     * Sums the defense of the equipped items (a broken piece, durability 0, protects no more). Changes nothing.
      */
-    private processEquipmentStats(items: InventoryItemRecord[], damage: number): { flatDefense: number; percentDefense: number } {
+    private computeEquipmentDefense(items: InventoryItemRecord[]): { flatDefense: number; percentDefense: number } {
         let flatDefense = 0;
         let percentDefense = 0;
 
         for (const item of items) {
-            // Rationale: the item data lives in `itemNbtData`; a broken piece (durability 0) protects no more.
+            // Rationale: the item data lives in `itemNbtData`.
             const data = item.itemNbtData;
             if (!item.isEquipped || !data) {
                 continue;
@@ -548,18 +584,36 @@ export default class PlayerEntity {
 
             const defenseBonus = data.defenseBonus ?? data["defense"];
             if (typeof defenseBonus === "number") {
-                flatDefense += defenseBonus;
+                // Affinity of the class with armor: its pieces protect better.
+                flatDefense += item.category === ItemCategory.Armor ? defenseBonus * (1 + this.getClassPassives().armorAffinityPercent / 100) : defenseBonus;
             }
 
             const armorBonusPercent = data["armorBonusPercent"];
             if (typeof armorBonusPercent === "number") {
                 percentDefense += armorBonusPercent / 100;
             }
-
-            this.processItemDurability(item, data, damage, typeof defenseBonus === "number" || typeof armorBonusPercent === "number");
         }
 
         return { flatDefense, percentDefense };
+    }
+
+    /**
+     * Wears the equipped pieces that provide defense down (the inventory snapshot is saved by the caller).
+     */
+    private applyEquipmentWear(items: InventoryItemRecord[], damage: number): void {
+        for (const item of items) {
+            const data = item.itemNbtData;
+            if (!item.isEquipped || !data) {
+                continue;
+            }
+            if (typeof data.durability === "number" && data.durability <= 0) {
+                continue;
+            }
+
+            const defenseBonus = data.defenseBonus ?? data["defense"];
+            const armorBonusPercent = data["armorBonusPercent"];
+            this.processItemDurability(item, data, damage, typeof defenseBonus === "number" || typeof armorBonusPercent === "number");
+        }
     }
 
     /**

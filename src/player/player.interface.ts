@@ -1,6 +1,7 @@
 import type { PlayerClassId } from "./player.class.js";
 import type { BestiaryState } from "../bestiary/bestiary.types.js";
 import type { PlayerJobsState } from "../jobs/job.types.js";
+import type { PlayerFarmState } from "../farming/crop.types.js";
 import type { PlayerAchievementState } from "../achievements/achievement.types.js";
 import type { PlayerEffectsState } from "../effects/effect.types.js";
 import type { TitleDefinition } from "../title/title.types.js";
@@ -43,6 +44,10 @@ export interface PlayerData {
     bankGold: number;
     /** Indicates whether the player's bank account is unlocked. */
     bankUnlocked: boolean;
+    /** Number of bank upgrades bought (0 when missing). */
+    bankLevel?: number;
+    /** The planted plots of the farmer job (empty when missing). */
+    farm?: PlayerFarmState;
     /** The identifiers of the titles owned by the player. */
     titles?: string[];
     /** The identifier of the equipped title, or an empty string. */
@@ -175,6 +180,10 @@ export interface PlayerRecord {
     bankGold: number;
     /** Indicates whether the bank is unlocked. */
     bankUnlocked: boolean;
+    /** Number of bank upgrades bought. */
+    bankLevel: number;
+    /** The planted plots of the farmer job. */
+    farm: PlayerFarmState;
     /** The identifiers of the owned titles. */
     titles: string[];
     /** The identifier of the equipped title, or an empty string. */

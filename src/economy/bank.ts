@@ -1,9 +1,10 @@
 import PlayerEntity from "../player/player.entity.js";
 import AsyncQueue from "../utils/async-queue.js";
-import { BankLimitReachedError, BankLockedError, InsufficientFundsError, InvalidAmountError } from "../types/error.js";
+import { BankLimitReachedError, BankLockedError, BankMaxLevelError, InsufficientFundsError, InvalidAmountError } from "../types/error.js";
 import { BankResult } from "../types/result.js";
 import { consola } from "consola";
 import World from "../world.js";
+import { bankUpgradeCost, resolveBankUpgradeConfig } from "./bank-upgrade.js";
 
 export default class BankClass {
     public readonly worldInstance: World;
@@ -78,6 +79,84 @@ export default class BankClass {
     }
 
     /**
+     * Gets the gold ceiling of the bank of a player: the `bankMaxGoldLimit` world option plus the ceiling granted by
+     * the bank upgrades, doubled when the player is married.
+     *
+     * @param playerEntity The player.
+     * @returns The ceiling, or `-1` when the bank is unlimited.
+     */
+    public getGoldLimit(playerEntity: PlayerEntity): number {
+        const options = this.worldInstance.initializationOptions;
+        const maxGoldLimit = options.bankMaxGoldLimit ?? 500000;
+        // Rationale: -1 means "unlimited" and must not be doubled for married players (it would become -2).
+        if (maxGoldLimit === -1) return -1;
+        const upgrades = resolveBankUpgradeConfig(options.bankUpgrades);
+        const base = maxGoldLimit + playerEntity.bankLevel * upgrades.goldLimitPerLevel;
+        return playerEntity.marriage.isMarried() ? base * 2 : base;
+    }
+
+    /**
+     * Gets the price of the next bank upgrade of a player.
+     *
+     * @param playerEntity The player.
+     * @returns The price in gold, or `undefined` when the bank is at its maximum level.
+     */
+    public getUpgradeCost(playerEntity: PlayerEntity): number | undefined {
+        const config = resolveBankUpgradeConfig(this.worldInstance.initializationOptions.bankUpgrades);
+        return playerEntity.bankLevel >= config.maxLevel ? undefined : bankUpgradeCost(config, playerEntity.bankLevel);
+    }
+
+    /**
+     * Buys the next bank upgrade: raises the gold ceiling and the item slots, for a price that grows with each level.
+     * Emits the cancellable `bankUpgrade` event before anything is paid.
+     *
+     * @param playerEntity The player.
+     * @returns `true` when the bank was upgraded, `false` when a listener cancelled the upgrade.
+     * @throws {BankLockedError} If the bank is not unlocked.
+     * @throws {BankMaxLevelError} If the bank is at its maximum level.
+     * @throws {InsufficientFundsError} If the wallet cannot pay the price.
+     */
+    public async upgrade(playerEntity: PlayerEntity): Promise<boolean> {
+        playerEntity.assertCanAct("bank.upgrade");
+        if (!playerEntity.bankUnlocked) throw new BankLockedError();
+        const config = resolveBankUpgradeConfig(this.worldInstance.initializationOptions.bankUpgrades);
+
+        return await this.transactions.run(async () => {
+            playerEntity.assertCanAct("bank.upgrade");
+            const previousLevel = playerEntity.bankLevel;
+            if (previousLevel >= config.maxLevel) throw new BankMaxLevelError(config.maxLevel);
+            const cost = bankUpgradeCost(config, previousLevel);
+            if (playerEntity.gold < cost) {
+                consola.warn(`Bank upgrade failed for ${playerEntity.name}: insufficient gold (${playerEntity.gold}/${cost}).`);
+                throw new InsufficientFundsError(`Not enough gold to upgrade the bank (${cost} required).`);
+            }
+
+            const level = previousLevel + 1;
+            const options = this.worldInstance.initializationOptions;
+            const baseGold = options.bankMaxGoldLimit ?? 500000;
+            const baseGoldLimit = baseGold === -1 ? -1 : baseGold + level * config.goldLimitPerLevel;
+            const event = await this.worldInstance.events.emitCancellable("bankUpgrade", {
+                playerId: playerEntity.id,
+                player: playerEntity,
+                cost,
+                previousLevel,
+                level,
+                goldLimit: baseGoldLimit === -1 ? -1 : playerEntity.marriage.isMarried() ? baseGoldLimit * 2 : baseGoldLimit,
+                itemSlots: playerEntity.itemBank.getCapacity() + config.slotsPerLevel
+            });
+            if (event.isCancelled) return false;
+
+            // Re-checked after the listeners ran: they may have spent gold or upgraded the bank.
+            if (playerEntity.bankLevel !== previousLevel || playerEntity.gold < cost) return false;
+            playerEntity.gold -= cost;
+            playerEntity.bankLevel = level;
+            consola.success(`${playerEntity.name} upgraded their bank to level ${level} for ${cost} gold.`);
+            await this.worldInstance.players.save(playerEntity);
+            return true;
+        });
+    }
+
+    /**
      * Deposits money from wallet to bank.
      */
     public async deposit(playerEntity: PlayerEntity, depositAmount: number): Promise<BankResult> {
@@ -91,9 +170,7 @@ export default class BankClass {
                 throw new InsufficientFundsError("Not enough gold in wallet.");
             }
 
-            const maxGoldLimit = this.worldInstance.initializationOptions.bankMaxGoldLimit ?? 500000;
-            // Rationale: -1 means "unlimited" and must not be doubled for married players (it would become -2).
-            const effectiveLimit = maxGoldLimit === -1 ? -1 : playerEntity.marriage.isMarried() ? maxGoldLimit * 2 : maxGoldLimit;
+            const effectiveLimit = this.getGoldLimit(playerEntity);
 
             if (effectiveLimit !== -1 && (playerEntity.bankGold + depositAmount) > effectiveLimit) {
                 consola.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);

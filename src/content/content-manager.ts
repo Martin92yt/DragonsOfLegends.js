@@ -5,6 +5,9 @@ import type LootboxManager from "../lootbox/lootbox.manager.js";
 import type ShopManager from "../shop/shop.manager.js";
 import type EnemyRegistry from "../enemy/enemy.registry.js";
 import type ItemRegistry from "../inventory/item.registry.js";
+import type RecipeRegistry from "../crafting/recipe.registry.js";
+import type EnchantmentRegistry from "../enchanting/enchantment.registry.js";
+import type CropRegistry from "../farming/crop.registry.js";
 import type JobManager from "../jobs/job.manager.js";
 import type LocationManager from "../location/location.js";
 import type PlayerClassRegistry from "../player/player-class.registry.js";
@@ -25,6 +28,9 @@ export interface ContentTargets {
     readonly shops: ShopManager;
     readonly classes: PlayerClassRegistry;
     readonly jobs: JobManager;
+    readonly recipes: RecipeRegistry;
+    readonly enchantments: EnchantmentRegistry;
+    readonly crops: CropRegistry;
     readonly titles: TitleManager;
     readonly achievements: AchievementManager;
     readonly location: LocationManager;
@@ -33,7 +39,7 @@ export interface ContentTargets {
 /**
  * Loads content packs into a world, atomically.
  *
- * A pack is applied in this order: effects, items, lootboxes, shops, enemies, classes, jobs, titles, achievements, locations, then its `setup` hook.
+ * A pack is applied in this order: effects, items, lootboxes, shops, enemies, classes, jobs, recipes, enchantments, crops, titles, achievements, locations, then its `setup` hook.
  * If anything fails, every registration made by the pack is reverted and the original error is rethrown.
  */
 export default class ContentManager {
@@ -80,6 +86,9 @@ export default class ContentManager {
             this.fill(this.targets.enemies, pack.enemies, counts, undo, override);
             this.fill(this.targets.classes, pack.classes, counts, undo, override);
             this.fill(this.targets.jobs, pack.jobs, counts, undo, override);
+            this.fill(this.targets.recipes, pack.recipes, counts, undo, override);
+            this.fill(this.targets.enchantments, pack.enchantments, counts, undo, override);
+            this.fill(this.targets.crops, pack.crops, counts, undo, override);
             this.fill(this.targets.titles, pack.titles, counts, undo, override);
             this.fillAchievements(pack.achievements, counts, undo, override);
 
@@ -155,6 +164,9 @@ export default class ContentManager {
         this.targets.enemies.lock();
         this.targets.classes.lock();
         this.targets.jobs.lock();
+        this.targets.recipes.lock();
+        this.targets.enchantments.lock();
+        this.targets.crops.lock();
         this.targets.titles.lock();
     }
 
@@ -172,6 +184,9 @@ export default class ContentManager {
         this.targets.enemies.unlock();
         this.targets.classes.unlock();
         this.targets.jobs.unlock();
+        this.targets.recipes.unlock();
+        this.targets.enchantments.unlock();
+        this.targets.crops.unlock();
         this.targets.titles.unlock();
     }
 

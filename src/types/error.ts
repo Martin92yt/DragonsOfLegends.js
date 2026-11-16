@@ -900,3 +900,124 @@ export class UnknownLocationError extends Error {
         this.name = "UnknownLocationError";
     }
 }
+
+
+export class InvalidBankUpgradeConfigError extends BankError {
+    /**
+     * Creates an error indicating that the `bankUpgrades` world option is invalid.
+     *
+     * @param detail What is wrong.
+     * @returns void
+     */
+    public constructor(detail: string) {
+        super(`Invalid bankUpgrades option: ${detail}.`);
+        this.name = "InvalidBankUpgradeConfigError";
+    }
+}
+
+export class BankMaxLevelError extends BankError {
+    /**
+     * Creates an error indicating that the bank cannot be upgraded further.
+     *
+     * @param maxLevel The maximum bank level.
+     * @returns void
+     */
+    public constructor(public readonly maxLevel: number) {
+        super(`The bank is already at its maximum level (${maxLevel}).`);
+        this.name = "BankMaxLevelError";
+    }
+}
+
+export class CraftingError extends Error {
+    /**
+     * Creates a general crafting-related error.
+     *
+     * @param message The detailed error message.
+     * @returns void
+     */
+    public constructor(message: string) {
+        super(message);
+        this.name = "CraftingError";
+    }
+}
+
+export class UnknownRecipeError extends CraftingError {
+    /**
+     * Creates an error indicating that a recipe is not registered.
+     *
+     * @param recipeId The recipe identifier.
+     * @returns void
+     */
+    public constructor(public readonly recipeId: string) {
+        super(`Unknown recipe "${recipeId}".`);
+        this.name = "UnknownRecipeError";
+    }
+}
+
+export class RecipeLevelTooLowError extends CraftingError {
+    /**
+     * Creates an error indicating that the job level is too low for a recipe or an enchantment.
+     *
+     * @param what What is locked (recipe or enchantment identifier).
+     * @param required The required job level.
+     * @param actual The level of the player.
+     * @returns void
+     */
+    public constructor(public readonly what: string, public readonly required: number, public readonly actual: number) {
+        super(`"${what}" requires job level ${required} (current: ${actual}).`);
+        this.name = "RecipeLevelTooLowError";
+    }
+}
+
+export class MissingIngredientsError extends CraftingError {
+    /**
+     * Creates an error indicating that the player lacks materials.
+     *
+     * @param missing What is missing, as `{ itemId, required, available }`.
+     * @returns void
+     */
+    public constructor(public readonly missing: ReadonlyArray<{ itemId: string; required: number; available: number }>) {
+        super(`Missing materials: ${missing.map((entry) => `${entry.itemId} (${entry.available}/${entry.required})`).join(", ")}.`);
+        this.name = "MissingIngredientsError";
+    }
+}
+
+export class EnchantingError extends CraftingError {
+    /**
+     * Creates an error indicating that an enchantment cannot be applied.
+     *
+     * @param message The detailed error message.
+     * @returns void
+     */
+    public constructor(message: string) {
+        super(message);
+        this.name = "EnchantingError";
+    }
+}
+
+export class FarmingError extends Error {
+    /**
+     * Creates a general farming-related error.
+     *
+     * @param message The detailed error message.
+     * @returns void
+     */
+    public constructor(message: string) {
+        super(message);
+        this.name = "FarmingError";
+    }
+}
+
+export class CropNotReadyError extends FarmingError {
+    /**
+     * Creates an error indicating that a crop has not finished growing.
+     *
+     * @param plot The plot index.
+     * @param remainingMs The remaining growth time in milliseconds.
+     * @returns void
+     */
+    public constructor(public readonly plot: number, public readonly remainingMs: number) {
+        super(`The crop on plot ${plot} is not ready yet (${Math.ceil(remainingMs / 1000)}s left).`);
+        this.name = "CropNotReadyError";
+    }
+}

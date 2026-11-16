@@ -2,6 +2,7 @@ import PlayerEntity from "../player/player.entity.js";
 import EnemyEntity from "../enemy/enemy.js";
 import { consola } from "consola";
 import { CombatResult } from "../types/result.js";
+import { ItemCategory } from "../inventory/item.enum.js";
 import { ItemNBT, InventoryItemRecord } from "../inventory/inventory.interface.js";
 
 interface ItemDamageBonuses {
@@ -54,7 +55,10 @@ export default class Combat {
         // Rationale: the loot of an enemy is rolled when it dies, so the luck of the killer must be known before the blow.
         this.enemyEntity.dropLuckPercent = (await this.playerEntity.getModifiers()).luckPercent;
         const rawPlayerDamageOutput = await this.getPlayerDamage();
-        return this.enemyEntity.takeDamage(rawPlayerDamageOutput);
+        const inflicted = this.enemyEntity.takeDamage(rawPlayerDamageOutput);
+        // Enchantments of the worn equipment (e.g. Lifesteal) react to the blow before the enemy answers.
+        await this.playerEntity.worldInstance.enchanting.runAttackHooks(this.playerEntity, this.enemyEntity, inflicted);
+        return inflicted;
     }
 
     /**
@@ -142,8 +146,10 @@ export default class Combat {
         const equippedInventoryItems = await this.playerEntity.inventory?.getItems() ?? [];
         const accumulatedItemBonuses = this.aggregateItemBonuses(equippedInventoryItems);
 
+        const passives = this.playerEntity.getClassPassives();
         totalCalculatedDamage += accumulatedItemBonuses.flatBonus;
         totalCalculatedDamage *= 1 + accumulatedItemBonuses.percentageBonus;
+        totalCalculatedDamage *= 1 + passives.damagePercent / 100;
 
         if (equippedInventoryItems.length > 0) {
             await this.playerEntity.inventory?.save(equippedInventoryItems);
@@ -152,11 +158,11 @@ export default class Combat {
         const totalCriticalRate = Math.min(
             Combat.MAX_CRIT_RATE,
             // Rationale: worn amulets are already counted in the item bonuses; only the temporary effects are added here.
-            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus + this.playerEntity.effects.getModifiers().critRateBonus
+            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus + passives.critRateBonus + this.playerEntity.effects.getModifiers().critRateBonus
         );
 
         if (Math.random() < totalCriticalRate) {
-            totalCalculatedDamage *= Combat.CRIT_MULTIPLIER;
+            totalCalculatedDamage *= Combat.CRIT_MULTIPLIER + passives.critMultiplierBonus;
         }
 
         return Math.max(1, Math.floor(totalCalculatedDamage));
@@ -182,9 +188,11 @@ export default class Combat {
             }
 
             const currentItemBonuses = this.getItemDamageBonuses(inventoryItemRecord);
-            totalFlatBonus += currentItemBonuses.flatBonus;
-            totalPercentageBonus += currentItemBonuses.percentageBonus;
-            totalCritRateBonus += currentItemBonuses.critRateBonus;
+            // Affinity of the class with weapons: their bonuses are amplified.
+            const affinity = inventoryItemRecord.category === ItemCategory.Weapons ? 1 + this.playerEntity.getClassPassives().weaponAffinityPercent / 100 : 1;
+            totalFlatBonus += currentItemBonuses.flatBonus * affinity;
+            totalPercentageBonus += currentItemBonuses.percentageBonus * affinity;
+            totalCritRateBonus += currentItemBonuses.critRateBonus * affinity;
 
             if (currentItemBonuses.contributesToAttack) {
                 this.applyItemDurability(inventoryItemRecord);

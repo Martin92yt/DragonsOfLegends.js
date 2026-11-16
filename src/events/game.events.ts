@@ -1,4 +1,5 @@
-import type { EventEngine } from "./event.engine.js";
+import type { CancellableEvent, EventEngine } from "./event.engine.js";
+import type { EnchantmentId } from "../enchanting/enchantment.types.js";
 import type World from "../world.js";
 import type PlayerEntity from "../player/player.entity.js";
 import type { Attribute } from "../player/player.entity.js";
@@ -20,6 +21,11 @@ import type { LootboxOpenResult } from "../lootbox/lootbox.types.js";
  * - un événement est émis **après** que l'action a réussi : l'état du jeu est déjà à jour dans le payload.
  *
  * Exemples : `playerCreate`, `combatStart`, `itemEquip`, `bankDeposit`, `titleGrant`.
+ *
+ * **Exception : les événements annulables** (payload `CancellableEvent`, voir {@link CancellableEvents}) sont émis
+ * *avant* l'application de l'action. Un écouteur peut appeler `event.cancel(raison?)` : l'action n'a alors pas lieu
+ * (ou prend sa variante annulée : le joueur survit à sa mort). Les valeurs du payload (dégâts, santé, coûts...)
+ * sont celles que l'action produirait si elle n'était pas annulée.
  */
 
 /**
@@ -99,19 +105,32 @@ export interface GameEvents {
   };
 
   // ── Joueur : santé et mort ──────────────────────────────────────────────
-  playerDamage: PlayerEventPayload & {
+  /**
+   * **Annulable.** Le joueur va subir des dégâts : `damage` est le montant après mitigation, `health` la santé
+   * qu'il aurait ensuite. Si l'événement est annulé, aucun dégât n'est infligé (ni usure d'armure).
+   */
+  playerDamage: PlayerEventPayload & CancellableEvent & {
     readonly rawDamage: number;
     readonly damage: number;
     readonly health: number;
     readonly maxHealth: number;
   };
-  /** `respawnAt` (epoch ms) est défini en mode `cooldown` ; `lostGold`/`lostItems` en mode `loose`. */
-  playerDeath: PlayerEventPayload & {
+  /**
+   * **Annulable.** Le joueur va mourir ; rien n'est encore appliqué (ni cooldown, ni pertes, ni suppression hardcore).
+   * `respawnAt` (epoch ms) est défini en mode `cooldown` ; `lostGold`/`lostItems` en mode `loose` : ce sont les valeurs prévues.
+   * Si l'événement est annulé, la mort n'a pas lieu : le joueur survit avec `survivalHealth` PV.
+   */
+  playerDeath: PlayerEventPayload & CancellableEvent & {
     readonly mode: "hardcore" | "cooldown" | "loose";
     readonly locationId: string;
     readonly respawnAt?: number;
     readonly lostGold?: number;
     readonly lostItems?: ReadonlyArray<ItemQuantity>;
+    /**
+     * Santé avec laquelle le joueur survit si l'événement est annulé (1 par défaut, bornée entre 1 et la santé maximale).
+     * Modifiable par les écouteurs avant d'appeler `cancel()`.
+     */
+    survivalHealth: number;
   };
   /** Un joueur mort revient à la vie (fin du cooldown ou résurrection manuelle). */
   playerRevive: PlayerEventPayload & {
@@ -256,6 +275,19 @@ export interface GameEvents {
 
   // ── Banques ─────────────────────────────────────────────────────────────
   bankUnlock: PlayerEventPayload & { readonly cost: number };
+  /**
+   * **Annulable.** La banque va monter de niveau (plafond d'or et emplacements d'objets accrus).
+   * Si l'événement est annulé, aucun or n'est prélevé.
+   */
+  bankUpgrade: PlayerEventPayload & CancellableEvent & {
+    readonly cost: number;
+    readonly previousLevel: number;
+    readonly level: number;
+    /** Plafond d'or de la banque au nouveau niveau (`-1` : illimité). */
+    readonly goldLimit: number;
+    /** Nombre d'emplacements de la banque d'objets au nouveau niveau. */
+    readonly itemSlots: number;
+  };
   bankDeposit: PlayerEventPayload & {
     readonly amount: number;
     readonly wallet: number;
@@ -298,6 +330,54 @@ export interface GameEvents {
     readonly itemId: string;
   };
 
+  // ── Artisanat, enchantements, champs ───────────────────────────────────
+  /**
+   * **Annulable.** Une recette va être fabriquée ; les ingrédients ne sont retirés qu'après les écouteurs.
+   * `results` est ce que la fabrication produirait (identifiants et quantités).
+   */
+  itemCraft: PlayerEventPayload & CancellableEvent & {
+    readonly recipeId: string;
+    readonly jobId: string;
+    /** Nombre de fois que la recette est exécutée. */
+    readonly quantity: number;
+    /** Niveau du métier au moment de la fabrication (détermine le scaling de l'objet). */
+    readonly jobLevel: number;
+    readonly results: ReadonlyArray<ItemQuantity>;
+  };
+  /** **Annulable.** Un enchantement va être posé (ou amélioré) sur un objet ; les ressources ne sont prélevées qu'ensuite. */
+  itemEnchant: PlayerEventPayload & CancellableEvent & {
+    readonly itemId: string;
+    /** Emplacement d'équipement de l'objet, s'il est porté. */
+    readonly slot?: EquipmentSlot;
+    readonly enchantmentId: EnchantmentId;
+    readonly previousLevel: number;
+    readonly level: number;
+  };
+  /** Un objet a été réparé (ex. enchantement Mending). Non annulable : émis après la réparation. */
+  itemRepair: PlayerEventPayload & {
+    readonly itemId: string;
+    readonly slot?: EquipmentSlot;
+    /** Points de durabilité rendus. */
+    readonly repaired: number;
+    /** Durabilité après réparation. */
+    readonly durability: number;
+    /** Origine de la réparation (`enchantment:<id>`...). */
+    readonly source: string;
+  };
+  /** **Annulable.** Une graine va être plantée ; elle n'est retirée de l'inventaire qu'après les écouteurs. */
+  cropPlant: PlayerEventPayload & CancellableEvent & {
+    readonly cropId: string;
+    readonly plot: number;
+    /** Epoch ms de maturité prévue (durée de pousse réduite par le niveau de Paysan). */
+    readonly readyAt: number;
+  };
+  /** **Annulable.** Une parcelle va être récoltée ; si l'événement est annulé, la culture reste en place. */
+  cropHarvest: PlayerEventPayload & CancellableEvent & {
+    readonly cropId: string;
+    readonly plot: number;
+    readonly harvest: ReadonlyArray<ItemQuantity>;
+  };
+
   // ── Titres, mariage, bestiaire ──────────────────────────────────────────
   titleGrant: PlayerEventPayload & { readonly title: TitleDefinition };
   titleRevoke: PlayerEventPayload & { readonly title: TitleDefinition };
@@ -329,6 +409,14 @@ export interface GameEvents {
 
 /** Nom d'un événement du jeu. */
 export type GameEventName = keyof GameEvents;
+
+/** Noms des événements annulables (ceux que l'on émet avec `events.emitCancellable`). */
+export type CancellableGameEventName = {
+  [K in GameEventName]: GameEvents[K] extends CancellableEvent ? K : never;
+}[GameEventName];
+
+/** Table des événements annulables du jeu. */
+export type CancellableEvents = Pick<GameEvents, CancellableGameEventName>;
 
 /** Payload d'un événement du jeu. */
 export type GameEventPayload<K extends GameEventName> = GameEvents[K];

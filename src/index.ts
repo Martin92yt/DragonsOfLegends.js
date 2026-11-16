@@ -205,3 +205,22 @@ export { OFFICIAL_CLASSES, registerOfficialClasses } from "./player/official-cla
 export { createOfficialLocations } from "./location/official-map.js";
 export { OFFICIAL_ACHIEVEMENTS } from "./achievements/official-achievements.js";
 export { createPlayerRewardHandler } from "./achievements/achievement.rewards.js";
+
+// Crafting, enchanting, farming and bank upgrades
+export { default as CraftingManager, scaleResultNbt } from "./crafting/crafting.manager.js";
+export { default as RecipeRegistry } from "./crafting/recipe.registry.js";
+export type { RecipeDefinition, RecipeIngredient, RecipeResult, CraftResult } from "./crafting/recipe.types.js";
+export { default as EnchantingManager } from "./enchanting/enchanting.manager.js";
+export { default as EnchantmentRegistry } from "./enchanting/enchantment.registry.js";
+export { ENCHANTING_JOB_ID, ENCHANTMENTS_NBT_KEY, MAX_DURABILITY_NBT_KEY, createEnchantmentsNbt, readEnchantments } from "./enchanting/enchantment.types.js";
+export type { EnchantmentDefinition, EnchantmentHooks, EnchantmentContext, EnchantResult, EnchantTarget } from "./enchanting/enchantment.types.js";
+export { LIFESTEAL, MENDING, OFFICIAL_ENCHANTMENTS } from "./enchanting/official-enchantments.js";
+export { default as FarmingManager } from "./farming/farming.manager.js";
+export { default as CropRegistry } from "./farming/crop.registry.js";
+export { default as PlayerFarm } from "./farming/player.farm.js";
+export { FARMING_JOB_ID } from "./farming/crop.types.js";
+export type { CropDefinition, CropYield, HarvestResult, PlantResult, PlotView } from "./farming/crop.types.js";
+export { CRAFTING_ITEMS, OFFICIAL_CROPS, OFFICIAL_RECIPES } from "./crafting/official/official-crafting.js";
+export { bankUpgradeCost, resolveBankUpgradeConfig, type BankUpgradeOptions } from "./economy/bank-upgrade.js";
+export { resolveClassPassives, type ClassPassives } from "./player/class-passives.js";
+export type { CancellableEvent } from "./events/event.engine.js";

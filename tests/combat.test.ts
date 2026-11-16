@@ -13,7 +13,7 @@ import { EnemyType } from "../src/enemy/enemy.type.js";
 import { ItemCategory } from "../src/inventory/item.enum.js";
 import { PlayerClass } from "../src/player/player.class.js";
 import * as errors from "../src/types/error.js";
-import { createWorld, findRecord, fixAttributes, giveAndEquip, makeEnemy, makeItem, NEUTRAL_RANDOM, spawn, stubRandom, totalQuantity, useIsolatedWorkspace } from "./helpers/fixtures.js";
+import { createWorld, defined, findRecord, fixAttributes, giveAndEquip, makeEnemy, makeItem, NEUTRAL_RANDOM, spawn, stubRandom, totalQuantity, useIsolatedWorkspace } from "./helpers/fixtures.js";
 
 useIsolatedWorkspace();
 
@@ -202,7 +202,8 @@ describe("Combat resolution", () => {
         await giveAndEquip(player, "sword", makeItem("fury", ItemCategory.Weapons), { damageBonusPercent: 100 });
         world.combat.startWithEnemy(player, makeEnemy({ health: 1000 }));
         stubRandom(t, NEUTRAL_RANDOM);
-        assert.equal((await world.combat.attack(player.id)).enemyDamage, 20);
+        // The Warrior's weapon affinity (+10%) amplifies the +100% bonus to +110%: 10 * 2.1.
+        assert.equal((await world.combat.attack(player.id)).enemyDamage, 21);
     });
 
     it("raises the critical rate with weapon bonuses (and aliases), capped at 75%", async (t) => {
@@ -238,5 +239,26 @@ describe("Combat resolution", () => {
         const result = await world.combat.attack(player.id);
         assert.equal(result.victory, true);
         assert.equal(await totalQuantity(player, "oreille_gobelin"), 1);
+    });
+});
+
+describe("Class passives", () => {
+    it("the Rogue crits harder and more often than a classless baseline", async (t) => {
+        const world = createWorld();
+        const rogue = await spawn(world, PlayerClass.Rogue);
+        const passives = rogue.getClassPassives();
+        assert.equal(passives.critRateBonus, 0.08);
+        assert.equal(passives.critMultiplierBonus, 0.25);
+        assert.equal(passives.jobXpPercent["enchanting"], 10);
+    });
+
+    it("the Warrior's armor affinity and defense passive reduce incoming damage", async () => {
+        const world = createWorld();
+        const warrior = await spawn(world, PlayerClass.Warrior);
+        const explorer = await spawn(world, PlayerClass.Explorer);
+        for (const p of [warrior, explorer]) { p.attributes.defense = 20; }
+        const a = defined(await warrior.takeDamage(100));
+        const b = defined(await explorer.takeDamage(100));
+        assert.ok(a.reducedDamage < b.reducedDamage);
     });
 });

@@ -26,7 +26,7 @@ describe("loadOfficialPack", () => {
         const world = createWorld();
         assert.equal(world.items.size, 0);
         const loaded = world.loadOfficialPack();
-        assert.deepEqual(loaded.map((pack) => pack.id).sort(), [OFFICIAL_PACK_IDS.items, OFFICIAL_PACK_IDS.achievements].sort());
+        assert.deepEqual(loaded.map((pack) => pack.id).sort(), [OFFICIAL_PACK_IDS.items, OFFICIAL_PACK_IDS.achievements, OFFICIAL_PACK_IDS.crafting].sort());
         assert.ok(world.items.has("health_potion") && world.shops.has("general_store") && world.lootboxes.has("pouch_rare"));
         assert.equal(world.achievements.list().length, OFFICIAL_ACHIEVEMENTS.length);
         assert.deepEqual(world.loadOfficialPack(), [], "a second call loads nothing");

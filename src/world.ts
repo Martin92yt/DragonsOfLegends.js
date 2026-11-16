@@ -19,7 +19,11 @@ import JobManager from "./jobs/job.manager.js";
 import type { JobDefinition } from "./jobs/job.types.js";
 import BestiaryManager from "./bestiary/bestiary.manager.js";
 import type { BestiaryOptions } from "./bestiary/bestiary.types.js";
+import CraftingManager from "./crafting/crafting.manager.js";
+import EnchantingManager from "./enchanting/enchanting.manager.js";
+import FarmingManager from "./farming/farming.manager.js";
 import { resolveItemBankCapacity } from "./economy/item-bank.js";
+import { resolveBankUpgradeConfig, type BankUpgradeOptions } from "./economy/bank-upgrade.js";
 import TitleManager from "./title/title.manager.js";
 import EnemyRegistry from "./enemy/enemy.registry.js";
 import type {
@@ -101,6 +105,11 @@ export interface WorldInitializationOptions {
    * `loadOfficialPack()` is the simple way). Disabled by default.
    */
   premadeAchievements?: boolean;
+  /**
+   * Loads the official crafting content: the farmer, blacksmith and enchanter jobs, their recipes, crops and the
+   * Lifesteal and Mending enchantments. Disabled by default (opt-in like the items): `officialPack: true` or `loadOfficialPack()`.
+   */
+  premadeCrafting?: boolean;
   /** Loads the official titles (enabled by default). */
   premadeTitles?: boolean;
   /** Loads the official jobs (enabled by default). */
@@ -139,6 +148,8 @@ export interface WorldInitializationOptions {
   /** Number of slots of the item bank (40 by default). */
   bankCapacitySlots?: number;
   bankMaxGoldLimit?: number;
+  /** Cost and effect of the bank upgrades (see {@link BankUpgradeOptions}). */
+  bankUpgrades?: BankUpgradeOptions;
 
   regen?: {
     enabled: boolean;
@@ -171,6 +182,12 @@ export default class World extends EventEmitter {
   public readonly content: ContentManager;
   public readonly events: GameEventEngine;
   public readonly jobs: JobManager;
+  /** Recipes of the crafting engine. */
+  public readonly crafting: CraftingManager;
+  /** Enchantments and their hooks. */
+  public readonly enchanting: EnchantingManager;
+  /** Crops of the farmer job. */
+  public readonly farming: FarmingManager;
   public readonly bestiary: BestiaryManager;
   public initializationOptions: WorldInitializationOptions;
   /**
@@ -193,6 +210,7 @@ export default class World extends EventEmitter {
       // Opt-in: registering the official items starts granting the starter items to every new player.
       premadeItems: officialPack,
       premadeAchievements: officialPack,
+      premadeCrafting: officialPack,
       premadeClasses: premade,
       checkUpdates: true,
       deathMode: "cooldown",
@@ -219,6 +237,7 @@ export default class World extends EventEmitter {
     // Fail-fast : valide les taux de perte d'objets dès la création du monde
     resolveDeathItemLossConfig(this.initializationOptions.deathItemLoss);
     resolveItemBankCapacity(this.initializationOptions.bankCapacitySlots);
+    resolveBankUpgradeConfig(this.initializationOptions.bankUpgrades);
     parseDuration(this.initializationOptions.deathCooldown ?? "1m");
     resolveDeathRespawnConfig(this.initializationOptions.deathRespawn);
 
@@ -238,6 +257,9 @@ export default class World extends EventEmitter {
       logger: consola,
     });
     this.jobs = new JobManager();
+    this.crafting = new CraftingManager(this);
+    this.enchanting = new EnchantingManager(this);
+    this.farming = new FarmingManager(this);
     this.combat = new CombatManager(
       this.enemies,
       this.initializationOptions.enemySpawnRules,
@@ -256,6 +278,9 @@ export default class World extends EventEmitter {
       shops: this.shops,
       classes: this.classes,
       jobs: this.jobs,
+      recipes: this.crafting,
+      enchantments: this.enchanting,
+      crops: this.farming,
       titles: this.titles,
       achievements: this.achievements,
       location: this.location,
@@ -309,6 +334,7 @@ export default class World extends EventEmitter {
       [OFFICIAL_PACK_IDS.titles]: options.premadeTitles,
       [OFFICIAL_PACK_IDS.map]: options.premadeMap,
       [OFFICIAL_PACK_IDS.achievements]: options.premadeAchievements,
+      [OFFICIAL_PACK_IDS.crafting]: options.premadeCrafting,
     };
     for (const pack of officialPacks) {
       if (enabled[pack.id]) this.content.use(pack);

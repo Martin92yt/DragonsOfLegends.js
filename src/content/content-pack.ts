@@ -8,6 +8,9 @@ import type { JobDefinition } from "../jobs/job.types.js";
 import type { LocationBuilder } from "../location/location.builder.js";
 import type { LocationCreateParametres, LocationLinkSpec } from "../location/location.interface.js";
 import type { PlayerClassDefinition } from "../player/player-class.definition.js";
+import type { RecipeDefinition } from "../crafting/recipe.types.js";
+import type { EnchantmentDefinition } from "../enchanting/enchantment.types.js";
+import type { CropDefinition } from "../farming/crop.types.js";
 import type { TitleDefinition } from "../title/title.types.js";
 import type World from "../world.js";
 
@@ -40,6 +43,12 @@ export interface ContentPack {
     readonly classes?: readonly PlayerClassDefinition[];
     /** Jobs (and their actions, loot tables, tool rewards...). */
     readonly jobs?: readonly JobDefinition[];
+    /** Recipes of the crafting engine (the jobs they reference may come from this pack or a dependency). */
+    readonly recipes?: readonly RecipeDefinition[];
+    /** Enchantments. */
+    readonly enchantments?: readonly EnchantmentDefinition[];
+    /** Crops of the farmer job. */
+    readonly crops?: readonly CropDefinition[];
     /** Titles. */
     readonly titles?: readonly TitleDefinition[];
     /**

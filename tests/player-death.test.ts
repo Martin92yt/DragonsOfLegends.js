@@ -165,3 +165,39 @@ describe("Player death modes", () => {
         assert.equal(player.health.current, player.health.max);
     });
 });
+
+describe("Cancellable death and damage", () => {
+    it("a cancelled playerDeath keeps the player alive with 1 HP and no penalty", async () => {
+        const world = createWorld({ deathMode: "loose", deathPenaltyRate: 10 });
+        const player = await spawn(world);
+        player.gold = 1000;
+        world.events.on("playerDeath", (event) => event.cancel("divine intervention"));
+        const result = defined(await player.takeDamage(99999));
+        assert.equal(result.death?.mode, "cancelled");
+        assert.equal(player.health.current, 1);
+        assert.equal(player.isDead, false);
+        assert.equal(player.gold, 1000, "no gold penalty");
+    });
+
+    it("survivalHealth can be raised by a listener", async () => {
+        const world = createWorld();
+        const player = await spawn(world);
+        world.events.on("playerDeath", (event) => {
+            (event as { survivalHealth: number }).survivalHealth = 10;
+            event.cancel();
+        });
+        await player.takeDamage(99999);
+        assert.equal(player.health.current, 10);
+    });
+
+    it("a cancelled playerDamage applies no damage", async () => {
+        const world = createWorld();
+        const player = await spawn(world);
+        const before = player.health.current;
+        world.events.on("playerDamage", (event) => event.cancel());
+        const result = defined(await player.takeDamage(50));
+        assert.equal(result.cancelled, true);
+        assert.equal(result.reducedDamage, 0);
+        assert.equal(player.health.current, before);
+    });
+});

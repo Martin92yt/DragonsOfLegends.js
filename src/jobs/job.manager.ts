@@ -54,7 +54,7 @@ export default class JobManager extends Registry<JobDefinition> {
         if (definition.xpCurve && (!(definition.xpCurve.base > 0) || !(definition.xpCurve.growth >= 1))) {
             fail("xpCurve requires base > 0 and growth >= 1.");
         }
-        if (definition.actions.length === 0) fail("at least one action is required.");
+        if (definition.actions.length === 0 && !definition.passive) fail("at least one action is required.");
 
         const actionIds = new Set<string>();
         for (const action of definition.actions) {

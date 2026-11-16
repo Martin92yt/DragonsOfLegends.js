@@ -62,7 +62,7 @@ describe("Official content is a set of ordinary packs", () => {
     it("loads the five official packs by default (the items pack is opt-in)", () => {
         const world = createWorld();
         // Rationale: the items and achievements packs are opt-in (see `premadeItems`, `premadeAchievements`, `loadOfficialPack`).
-        const { items: _items, achievements: _achievements, ...defaultPacks } = OFFICIAL_PACK_IDS;
+        const { items: _items, achievements: _achievements, crafting: _crafting, ...defaultPacks } = OFFICIAL_PACK_IDS;
         assert.deepEqual(world.content.list().map((pack) => pack.id).slice(0, 5), Object.values(defaultPacks));
         assert.equal(world.enemies.size, OFFICIAL_ENEMIES.length);
         assert.equal(world.classes.size, 3);

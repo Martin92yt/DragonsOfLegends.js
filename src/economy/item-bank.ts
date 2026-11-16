@@ -3,6 +3,7 @@ import type { InventoryItemRecord } from "../inventory/inventory.interface.js";
 import { addToStacks, countAvailable, takeFromStacks } from "../inventory/item-stacks.js";
 import type PlayerEntity from "../player/player.entity.js";
 import { BankCapacityError, BankItemNotFoundError, BankLockedError, InvalidAmountError, InvalidBankCapacityError } from "../types/error.js";
+import { resolveBankUpgradeConfig } from "./bank-upgrade.js";
 import AsyncQueue from "../utils/async-queue.js";
 
 /**
@@ -71,12 +72,14 @@ export default class ItemBank {
     }
 
     /**
-     * Gets the total number of slots (`bankCapacitySlots` world option, 40 by default).
+     * Gets the total number of slots: the `bankCapacitySlots` world option (40 by default) plus the slots
+     * granted by the bank upgrades of the player.
      *
      * @returns The capacity in slots.
      */
     public getCapacity(): number {
-        return resolveItemBankCapacity(this.player.worldInstance.initializationOptions.bankCapacitySlots);
+        const options = this.player.worldInstance.initializationOptions;
+        return resolveItemBankCapacity(options.bankCapacitySlots) + this.player.bankLevel * resolveBankUpgradeConfig(options.bankUpgrades).slotsPerLevel;
     }
 
     /**

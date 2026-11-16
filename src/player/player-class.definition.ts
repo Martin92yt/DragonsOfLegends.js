@@ -1,3 +1,4 @@
+import type { ClassPassives } from "./class-passives.js";
 import type { ClassStats } from "./player.interface.js";
 
 /**
@@ -22,4 +23,6 @@ export interface PlayerClassDefinition {
      * @defaultValue "strength"
      */
     readonly attackStat?: AttackStat;
+    /** Passive bonuses of the class: combat, defense, experience, trades and equipment affinities. */
+    readonly passives?: ClassPassives;
 }

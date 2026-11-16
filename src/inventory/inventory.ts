@@ -414,22 +414,38 @@ export class InventoryEntity {
         if (!record || record.category !== ItemCategory.Consumables || owned < quantity) {
             return false;
         }
+
+        const behaviour = player.worldInstance.items.get(itemId)?.use;
+        // Rationale: an unknown effect is a configuration error; it must be reported before the item is consumed.
+        for (const effectId of behaviour?.effects ?? []) player.worldInstance.effects.require(effectId);
+        // Rationale: a pure healing item is not wasted on a player who is already at full health.
+        if (behaviour?.heal && !behaviour.effects?.length && !behaviour.lootbox && player.health.current >= player.health.max) {
+            return false;
+        }
         if (!(await this.removeUnequipped(itemId, quantity))) {
             return false;
         }
 
-        const behaviour = player.worldInstance.items.get(itemId)?.use;
         let healed = 0;
         const effects: string[] = [];
         const lootboxes: LootboxOpenResult[] = [];
-        for (let unit = 0; unit < quantity; unit++) {
-            if (behaviour?.heal) healed += player.heal(behaviour.heal, `item:${itemId}`);
-            for (const effectId of behaviour?.effects ?? []) {
-                await player.effects.apply(effectId);
-                effects.push(effectId);
+        let applied = 0;
+        try {
+            for (; applied < quantity; applied++) {
+                if (behaviour?.heal) healed += player.heal(behaviour.heal, `item:${itemId}`);
+                for (const effectId of behaviour?.effects ?? []) {
+                    await player.effects.apply(effectId);
+                    effects.push(effectId);
+                }
+                if (behaviour?.lootbox) lootboxes.push(await player.worldInstance.lootboxes.open(player, behaviour.lootbox));
             }
-            if (behaviour?.lootbox) lootboxes.push(await player.worldInstance.lootboxes.open(player, behaviour.lootbox));
+        } catch (error) {
+            // The unit that failed and the ones not yet used are given back.
+            await this.add(itemId, quantity - applied);
+            throw error;
         }
+        // Effects and health are part of the player record: persist them with the inventory change.
+        await player.worldInstance.players.save(player);
 
         consola.success(`Used ${quantity}x ${itemId} for ${this.getOwnerName()}.`);
         await player.worldInstance.events.emitAsync("itemUse", { playerId: player.id, player, itemId, quantity, healed, effects, lootboxes });

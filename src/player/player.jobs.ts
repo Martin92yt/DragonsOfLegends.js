@@ -171,6 +171,37 @@ export default class PlayerJobs {
     }
 
     /**
+     * Grants experience to a job outside of its actions (crafting, enchanting, harvesting). The experience is
+     * boosted by the affinity of the class with the job; level rewards and `jobLevelUp` events are handled as usual.
+     *
+     * @param jobId The job identifier.
+     * @param baseXp The experience before the class affinity.
+     * @returns The experience gained and the level before and after.
+     * @throws {UnknownJobError} If the job is not registered.
+     * @throws {PlayerDeadError} If the player is dead.
+     */
+    public async addExperience(jobId: string, baseXp: number): Promise<{ xpGained: number; previousLevel: number; level: number; rewards: JobReward[] }> {
+        this.player.assertCanAct("jobs.addExperience");
+        const job = this.player.worldInstance.jobs.require(jobId);
+        const world = this.player.worldInstance;
+        const outcome = await this.queue.run(async () => {
+            const state = this.stateOf(job.id);
+            const classBonus = this.player.getClassPassives().jobXpPercent[job.id] ?? 0;
+            const xpGained = Math.max(0, Math.floor(baseXp * (1 + Math.max(classBonus, 0) / 100)));
+            const previousLevel = state.level;
+            const records = await this.player.inventory.getItems();
+            const rewards = this.applyExperience(job, state, xpGained, records);
+            await this.player.inventory.save(records);
+            await world.players.save(this.player);
+            return { xpGained, previousLevel, level: state.level, rewards };
+        });
+        for (let level = outcome.previousLevel + 1; level <= outcome.level; level++) {
+            await world.events.emitAsync("jobLevelUp", { playerId: this.player.id, player: this.player, jobId: job.id, previousLevel: level - 1, level });
+        }
+        return outcome;
+    }
+
+    /**
      * Exports the state for persistence.
      *
      * @returns A copy of the jobs state.
@@ -218,7 +249,8 @@ export default class PlayerJobs {
         }
 
         // Experience and levels
-        const xpGained = Math.floor(action.xp * (1 + Math.max(modifiers.xpBonus, 0) / 100));
+        const classBonus = this.player.getClassPassives().jobXpPercent[job.id] ?? 0; // affinity of the class with the trade
+        const xpGained = Math.floor(action.xp * (1 + Math.max(modifiers.xpBonus, 0) / 100) * (1 + Math.max(classBonus, 0) / 100));
         const previousLevel = state.level;
         const rewards = this.applyExperience(job, state, xpGained, records);
 
