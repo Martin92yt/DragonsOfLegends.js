@@ -1,5 +1,7 @@
-import { consola } from "consola";
 import { DuplicateRegistryEntryError, RegistryLockedError, UnknownRegistryEntryError } from "../types/error.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("registry");
+
 
 /**
  * A change applied to a registry.
@@ -144,7 +146,7 @@ export default class Registry<TDefinition extends object> implements Iterable<TD
             const previous = this.entries.get(id);
             this.entries.set(id, stored);
             changes.push(previous ? { type: "replaced", id, definition: stored, previous } : { type: "registered", id, definition: stored });
-            consola.debug(`${this.options.kind} ${previous ? "replaced" : "registered"}: ${id}.`);
+            log.debug(`${this.options.kind} ${previous ? "replaced" : "registered"}: ${id}.`);
         }
         for (const change of changes) this.notify(change);
         return staged.map(({ stored }) => stored);
@@ -283,7 +285,7 @@ export default class Registry<TDefinition extends object> implements Iterable<TD
             try {
                 listener(change);
             } catch (error) {
-                consola.error(`A ${this.options.kind} registry listener failed.`, error);
+                log.error(`A ${this.options.kind} registry listener failed.`, error);
             }
         }
     }

@@ -1,8 +1,10 @@
-import { consola } from "consola";
 import { MongoClient, Collection, Db } from "mongodb";
 import { InventoryEntity } from "../inventory/inventory.js";
 import { EQUIPMENT_RECORD_KEYS, EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
 import { EquipmentSlot, ItemCategory, ItemRarity, VALID_EQUIPMENT_SLOTS } from "../inventory/item.enum.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("mongodb");
+
 
 interface MongoInventoryDocument {
     playerId: string;
@@ -43,9 +45,9 @@ export default class MongoInventoryAdapter {
             this.db = this.client.db(dbName);
             this.inventoryCollection = this.db.collection<MongoInventoryDocument>("inventory");
             this.isConnected = true;
-            consola.success("MongoDB inventory database initialized.");
+            log.success("MongoDB inventory database initialized.");
         } catch (error) {
-            consola.error("Failed to initialize MongoDB inventory database:", error);
+            log.error("Failed to initialize MongoDB inventory database:", error);
             throw error;
         }
     }
@@ -65,7 +67,7 @@ export default class MongoInventoryAdapter {
             const documents = await this.inventoryCollection.find({ playerId }).toArray();
             return documents.map(doc => this.mapDocumentToInventoryItem(doc));
         } catch (error) {
-            consola.error(`Failed to retrieve inventory for player ${playerId} from MongoDB:`, error);
+            log.error(`Failed to retrieve inventory for player ${playerId} from MongoDB:`, error);
             return [];
         }
     }
@@ -83,7 +85,7 @@ export default class MongoInventoryAdapter {
 
             for (const itemRecord of inventoryItems) {
                 if (!itemRecord.itemId || itemRecord.quantity <= 0) {
-                    consola.warn(`Skipping invalid inventory item for player ${playerId}: ${itemRecord.itemId}`);
+                    log.warn(`Skipping invalid inventory item for player ${playerId}: ${itemRecord.itemId}`);
                     continue;
                 }
 
@@ -106,7 +108,7 @@ export default class MongoInventoryAdapter {
                 await this.inventoryCollection.insertMany(documentsToInsert);
             }
         } catch (error) {
-            consola.error(`Failed to save inventory for player ${playerId} in MongoDB:`, error);
+            log.error(`Failed to save inventory for player ${playerId} in MongoDB:`, error);
             throw error;
         }
     }
@@ -117,7 +119,7 @@ export default class MongoInventoryAdapter {
             const result = await this.inventoryCollection.deleteMany({ playerId });
             return (result.deletedCount ?? 0) > 0;
         } catch (error) {
-            consola.error(`Failed to clear inventory for player ${playerId} in MongoDB:`, error);
+            log.error(`Failed to clear inventory for player ${playerId} in MongoDB:`, error);
             return false;
         }
     }
@@ -150,7 +152,7 @@ export default class MongoInventoryAdapter {
                 }
             }
         } catch (error) {
-            consola.error(`Failed to retrieve equipment for player ${playerId} from MongoDB:`, error);
+            log.error(`Failed to retrieve equipment for player ${playerId} from MongoDB:`, error);
         }
 
         return playerEquipmentRecord;
@@ -169,9 +171,9 @@ export default class MongoInventoryAdapter {
             await this.initPromise;
             await this.client.close();
             this.isConnected = false;
-            consola.success("MongoDB inventory database closed.");
+            log.success("MongoDB inventory database closed.");
         } catch (error) {
-            consola.error("Error while closing MongoDB inventory database:", error);
+            log.error("Error while closing MongoDB inventory database:", error);
         }
     }
 
@@ -195,7 +197,7 @@ export default class MongoInventoryAdapter {
         if (MongoInventoryAdapter.VALID_CATEGORIES.has(categoryValue)) {
             return categoryValue as ItemCategory;
         }
-        consola.warn(`Unknown item category encountered: ${categoryValue}. Falling back to valuables.`);
+        log.warn(`Unknown item category encountered: ${categoryValue}. Falling back to valuables.`);
         return ItemCategory.Valuables;
     }
 
@@ -203,7 +205,7 @@ export default class MongoInventoryAdapter {
         if (MongoInventoryAdapter.VALID_RARITIES.has(categoryValue)) {
             return categoryValue as ItemRarity;
         }
-        consola.warn(`Unknown item rarity encountered: ${categoryValue}. Falling back to common.`);
+        log.warn(`Unknown item rarity encountered: ${categoryValue}. Falling back to common.`);
         return ItemRarity.Common;
     }
 
@@ -212,7 +214,7 @@ export default class MongoInventoryAdapter {
         if (MongoInventoryAdapter.VALID_SLOTS.has(slotValue)) {
             return slotValue as EquipmentSlot;
         }
-        consola.warn(`Unknown equipment slot encountered: ${slotValue}.`);
+        log.warn(`Unknown equipment slot encountered: ${slotValue}.`);
         return null;
     }
 }

@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import { MAX_DURABILITY_NBT_KEY } from "../enchanting/enchantment.types.js";
 import type { ItemNBT } from "../inventory/inventory.interface.js";
 import { countAvailable } from "../inventory/item-stacks.js";
@@ -8,6 +7,9 @@ import AsyncQueue from "../utils/async-queue.js";
 import type World from "../world.js";
 import RecipeRegistry from "./recipe.registry.js";
 import type { CraftResult, RecipeDefinition, RecipeResult } from "./recipe.types.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("crafting");
+
 
 /**
  * Computes the item data of a crafted item: the numeric values listed in `scaling` grow with the job level.
@@ -132,7 +134,7 @@ export default class CraftingManager extends RecipeRegistry {
                 }
                 produced.push({ itemId: result.item.itemId, quantity: result.quantity * quantity, ...(nbt ? { nbt } : {}) });
             }
-            consola.success(`${player.name} crafted ${quantity}x ${recipe.id}.`);
+            log.success(`${player.name} crafted ${quantity}x ${recipe.id}.`);
             return { crafted: true, recipeId: recipe.id, quantity, jobLevel, produced, xpGained: 0, level: jobLevel };
         } catch (error) {
             // Gives the consumed ingredients back so a failed craft costs nothing.

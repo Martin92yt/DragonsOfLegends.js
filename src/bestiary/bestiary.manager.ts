@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import type { Unsubscribe } from "../events/event.engine.js";
 import type { GameEvents } from "../events/game.events.js";
 import { InvalidBestiaryRewardError } from "../types/error.js";
@@ -7,6 +6,9 @@ import type {
   BestiaryDiscoveryGold,
   BestiaryOptions,
 } from "./bestiary.types.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("bestiary");
+
 
 /**
  * Priority of the bestiary listener: it runs before the other `monsterDefeated` listeners
@@ -104,7 +106,7 @@ export default class BestiaryManager {
 
     const player = await this.world.players.get(payload.playerId);
     if (!player) {
-      consola.warn(`Bestiary: unknown player ${payload.playerId}.`);
+      log.warn(`Bestiary: unknown player ${payload.playerId}.`);
       return;
     }
 

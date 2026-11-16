@@ -224,3 +224,6 @@ export { CRAFTING_ITEMS, OFFICIAL_CROPS, OFFICIAL_RECIPES } from "./crafting/off
 export { bankUpgradeCost, resolveBankUpgradeConfig, type BankUpgradeOptions } from "./economy/bank-upgrade.js";
 export { resolveClassPassives, type ClassPassives } from "./player/class-passives.js";
 export type { CancellableEvent } from "./events/event.engine.js";
+
+// Logging
+export { createLogger, getLogMode, setLogMode, isLogMode, LOG_MODES, type LogMode, type TaggedLogger } from "./utils/logger.js";

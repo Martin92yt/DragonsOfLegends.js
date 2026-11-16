@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import type { Item } from "../inventory/inventory.interface.js";
 import type ItemRegistry from "../inventory/item.registry.js";
 import Registry from "../registry/registry.js";
@@ -13,6 +12,9 @@ import {
 } from "../types/error.js";
 import AsyncQueue from "../utils/async-queue.js";
 import type { ShopDefinition, ShopListing, ShopPurchaseResult, ShopSaleResult } from "./shop.types.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("shop");
+
 
 /**
  * Registry of the shops of a world, and the way to buy from and sell to them with the gold of the game.
@@ -99,7 +101,7 @@ export default class ShopManager extends Registry<ShopDefinition> {
                 throw error;
             }
 
-            consola.success(`${player.name} bought ${quantity}x ${itemId} for ${totalPrice} gold.`);
+            log.success(`${player.name} bought ${quantity}x ${itemId} for ${totalPrice} gold.`);
             await player.worldInstance.events.emitAsync("shopBuy", { playerId: player.id, player, shopId, itemId, quantity, unitPrice, totalPrice });
             return { shopId, itemId, quantity, unitPrice, totalPrice, gold: player.gold };
         });
@@ -136,7 +138,7 @@ export default class ShopManager extends Registry<ShopDefinition> {
             const totalPrice = unitPrice * quantity;
             player.gold += totalPrice;
 
-            consola.success(`${player.name} sold ${quantity}x ${itemId} for ${totalPrice} gold.`);
+            log.success(`${player.name} sold ${quantity}x ${itemId} for ${totalPrice} gold.`);
             await player.worldInstance.events.emitAsync("shopSell", { playerId: player.id, player, shopId, itemId, quantity, unitPrice, totalPrice });
             return { shopId, itemId, quantity, unitPrice, totalPrice, gold: player.gold };
         });

@@ -1,6 +1,5 @@
     import { handlePlayerDeath, DeathResult } from "./Player.death.js";
 import type { PlayerClassId } from "./player.class.js";
-import { consola } from "consola";
 import { PlayerExperience, PlayerHealth, PlayerAttributes, ClassStats, PlayerSnapshot } from "./player.interface.js";
 import { InventoryEntity } from "../inventory/inventory.js";
 import type { InventoryItemRecord, ItemNBT } from "../inventory/inventory.interface.js";
@@ -23,6 +22,9 @@ import { resolvePlayerModifiers, scaleExperience, type PlayerModifiers } from ".
 import ItemBank from "../economy/item-bank.js";
 import EnemyEntity from "../enemy/enemy.js";
 import type Combat from "../combat/combat.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("player");
+
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
@@ -246,7 +248,7 @@ export default class PlayerEntity {
             }
 
             this.location = destinationId;
-            consola.success(`Player ${this.name} arrived at ${destinationId}.`);
+            log.success(`Player ${this.name} arrived at ${destinationId}.`);
             await events.emitAsync("travelComplete", {
                 playerId: this.id,
                 player: this,
@@ -275,7 +277,7 @@ export default class PlayerEntity {
      */
     public addXP(amount: number): GainExperienceResult {
         if (amount <= 0) {
-            consola.warn(`Player ${this.name} received invalid or zero experience amount: ${amount}.`);
+            log.warn(`Player ${this.name} received invalid or zero experience amount: ${amount}.`);
             return {
                 gainedAmount: 0,
                 totalExperience: this.experience.current,
@@ -475,7 +477,7 @@ export default class PlayerEntity {
     public levelUpSkill(attribute: Attribute): void {
         this.assertCanAct("player.levelUpSkill");
         if (this.attributes.points <= 0) {
-            consola.warn(`Player ${this.name} attempted to upgrade attribute without available points.`);
+            log.warn(`Player ${this.name} attempted to upgrade attribute without available points.`);
             throw new NoAttributePointsError();
         }
 
@@ -488,7 +490,7 @@ export default class PlayerEntity {
             value: this.attributes[attribute],
             remainingPoints: this.attributes.points
         });
-        consola.success(`Player ${this.name} upgraded attribute ${attribute}.`);
+        log.success(`Player ${this.name} upgraded attribute ${attribute}.`);
     }
 
     /**
@@ -534,12 +536,12 @@ export default class PlayerEntity {
      */
     private validateTravelState(): void {
         if (this.isTravelling) {
-            consola.warn(`Player ${this.name} attempted to move while already travelling.`);
+            log.warn(`Player ${this.name} attempted to move while already travelling.`);
             throw new PlayerAlreadyTravellingError();
         }
 
         if (this.inCombat) {
-            consola.warn(`Player ${this.name} attempted to move while in combat.`);
+            log.warn(`Player ${this.name} attempted to move while in combat.`);
             throw new MoveInCombatError();
         }
     }
@@ -712,14 +714,14 @@ export default class PlayerEntity {
             .then(() => {
                 this.health.current = this.health.max;
             })
-            .catch((error: unknown) => consola.error(`Failed to refresh the maximum health of ${this.id}.`, error));
+            .catch((error: unknown) => log.error(`Failed to refresh the maximum health of ${this.id}.`, error));
         this.attributes.strength++;
         this.attributes.agility++;
         this.attributes.intelligence++;
         this.attributes.defense++;
         this.attributes.points++;
         this.experience.required = this.level * PlayerEntity.XP_PER_LEVEL;
-        consola.success(`Player ${this.name} reached level ${this.level}.`);
+        log.success(`Player ${this.name} reached level ${this.level}.`);
         this.worldInstance.events.emit("playerLevelUp", {
             playerId: this.id,
             player: this,

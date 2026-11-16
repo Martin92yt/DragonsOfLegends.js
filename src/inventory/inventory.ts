@@ -1,11 +1,13 @@
 import InventoryDatabase from "./inventory.database.js";
 import { ItemNBT, InventoryItemRecord, EquipmentRecord } from "./inventory.interface.js";
-import { consola } from "consola";
 import { EquipmentSlot, ItemCategory, ItemRarity } from "./item.enum.js";
 import PlayerEntity from "../player/player.entity.js";
 import { Item } from "./inventory.interface.js";
 import AsyncQueue from "../utils/async-queue.js";
 import type { LootboxOpenResult } from "../lootbox/lootbox.types.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("inventory");
+
 
 type ItemInput = string | (Item & { data?: ItemNBT | null });
 
@@ -121,7 +123,7 @@ export class InventoryEntity {
 
         const extractedItemId = typeof itemInput === "string" ? itemInput : itemInput.itemId;
         if (!extractedItemId) {
-            consola.warn(`Attempt to add item with empty identifier for player ${this.getOwnerName()}.`);
+            log.warn(`Attempt to add item with empty identifier for player ${this.getOwnerName()}.`);
             return;
         }
 
@@ -139,7 +141,7 @@ export class InventoryEntity {
             const stackable = !resolvedItemData; // items carrying item data (durability, modifiers...) never merge
             const template = typeof itemInput === "string" ? sameStacks[0] : itemInput;
             if (!template) {
-                consola.warn(`Failed to add item ${extractedItemId} to inventory: missing item definition.`);
+                log.warn(`Failed to add item ${extractedItemId} to inventory: missing item definition.`);
                 return undefined;
             }
 
@@ -172,7 +174,7 @@ export class InventoryEntity {
             if (saveResult instanceof Promise) await saveResult;
             // Rationale: the definition passed by the caller is the reliable display name (stored names can be the item id).
             const name = typeof itemInput === "string" ? template.name : itemInput.name;
-            consola.success(`Added ${itemQuantity}x ${name} to inventory for ${this.getOwnerName()}.`);
+            log.success(`Added ${itemQuantity}x ${name} to inventory for ${this.getOwnerName()}.`);
             return name;
         });
         if (addedItemName === undefined) return;
@@ -206,7 +208,7 @@ export class InventoryEntity {
             const stacks = inventoryItems.filter(inventoryItem => inventoryItem.itemId === extractedItemId && !inventoryItem.isEquipped);
             const available = stacks.reduce((sum, stack) => sum + stack.quantity, 0);
             if (available < itemQuantity) {
-                consola.warn(`Failed to remove ${itemQuantity}x ${extractedItemId} from inventory for ${this.getOwnerName()}: insufficient quantity.`);
+                log.warn(`Failed to remove ${itemQuantity}x ${extractedItemId} from inventory for ${this.getOwnerName()}: insufficient quantity.`);
                 return false;
             }
 
@@ -222,7 +224,7 @@ export class InventoryEntity {
                 inventoryItems.filter(inventoryItem => inventoryItem.quantity > 0)
             );
             if (saveResult instanceof Promise) await saveResult;
-            consola.success(`Removed ${itemQuantity}x ${extractedItemId} from inventory for ${this.getOwnerName()}.`);
+            log.success(`Removed ${itemQuantity}x ${extractedItemId} from inventory for ${this.getOwnerName()}.`);
             return true;
         });
         if (!removed) return false;
@@ -251,13 +253,13 @@ export class InventoryEntity {
             const targetInventoryItem = inventoryItems.find(itemRecord => itemRecord.itemId === itemId && !itemRecord.isEquipped);
 
             if (!targetInventoryItem) {
-                consola.warn(`Failed to equip ${itemId} for ${this.getOwnerName()}: item not found in inventory.`);
+                log.warn(`Failed to equip ${itemId} for ${this.getOwnerName()}: item not found in inventory.`);
                 return undefined;
             }
 
             const permittedCategories = InventoryEntity.EQUIPMENT_CATEGORIES[equipmentSlot];
             if (!permittedCategories.includes(targetInventoryItem.category)) {
-                consola.warn(`Failed to equip ${itemId} to ${equipmentSlot}: category ${targetInventoryItem.category} is not permitted.`);
+                log.warn(`Failed to equip ${itemId} to ${equipmentSlot}: category ${targetInventoryItem.category} is not permitted.`);
                 return undefined;
             }
 
@@ -285,7 +287,7 @@ export class InventoryEntity {
         const { replacedItemId, name: equippedName } = outcome;
 
         this.playerEntityReference?.updateMaxHealth();
-        consola.success(`${this.getOwnerName()} equipped ${equippedName} to ${equipmentSlot}.`);
+        log.success(`${this.getOwnerName()} equipped ${equippedName} to ${equipmentSlot}.`);
 
         const { events } = this.playerEntityReference.worldInstance;
         if (replacedItemId !== undefined) {
@@ -327,12 +329,12 @@ export class InventoryEntity {
         });
 
         if (!equippedItemRecord) {
-            consola.warn(`Failed to unequip slot ${equipmentSlot} for ${this.getOwnerName()}: no item equipped.`);
+            log.warn(`Failed to unequip slot ${equipmentSlot} for ${this.getOwnerName()}: no item equipped.`);
             return false;
         }
 
         this.playerEntityReference?.updateMaxHealth();
-        consola.success(`${this.getOwnerName()} unequipped ${equippedItemRecord.name} from ${equipmentSlot}.`);
+        log.success(`${this.getOwnerName()} unequipped ${equippedItemRecord.name} from ${equipmentSlot}.`);
         await this.playerEntityReference.worldInstance.events.emitAsync("itemUnequip", {
             playerId: this.playerIdIdentifier,
             player: this.playerEntityReference,
@@ -352,7 +354,7 @@ export class InventoryEntity {
         const isInventoryCleared = clearResult instanceof Promise ? await clearResult : clearResult;
         
         if (isInventoryCleared) {
-            consola.success(`Cleared inventory for ${this.getOwnerName()}.`);
+            log.success(`Cleared inventory for ${this.getOwnerName()}.`);
         }
         return isInventoryCleared;
     }
@@ -447,7 +449,7 @@ export class InventoryEntity {
         // Effects and health are part of the player record: persist them with the inventory change.
         await player.worldInstance.players.save(player);
 
-        consola.success(`Used ${quantity}x ${itemId} for ${this.getOwnerName()}.`);
+        log.success(`Used ${quantity}x ${itemId} for ${this.getOwnerName()}.`);
         await player.worldInstance.events.emitAsync("itemUse", { playerId: player.id, player, itemId, quantity, healed, effects, lootboxes });
         return true;
     }
@@ -506,7 +508,7 @@ export class InventoryEntity {
         const inventoryItemRecord = stacks[0];
 
         if (!inventoryItemRecord || stacks.reduce((sum, stack) => sum + stack.quantity, 0) < itemQuantity) {
-            consola.warn(`Failed to sell ${itemQuantity}x ${itemId} for ${this.getOwnerName()}: insufficient quantity.`);
+            log.warn(`Failed to sell ${itemQuantity}x ${itemId} for ${this.getOwnerName()}: insufficient quantity.`);
             return 0;
         }
 
@@ -529,7 +531,7 @@ export class InventoryEntity {
             this.playerEntityReference.gold += calculatedGoldAmount;
         }
 
-        consola.success(`${this.getOwnerName()} sold ${itemQuantity}x ${inventoryItemRecord.name} for ${calculatedGoldAmount} gold.`);
+        log.success(`${this.getOwnerName()} sold ${itemQuantity}x ${inventoryItemRecord.name} for ${calculatedGoldAmount} gold.`);
         await this.playerEntityReference.worldInstance.events.emitAsync("itemSell", {
             playerId: this.playerIdIdentifier,
             player: this.playerEntityReference,

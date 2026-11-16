@@ -2,7 +2,6 @@ import { EventEmitter } from "node:events";
 import LocationClass from "./location/location.js";
 import PlayerManager from "./player/player.manager.js";
 import CombatManager from "./combat/combat.manager.js";
-import { consola } from "consola";
 import BankClass from "./economy/bank.js";
 import {
   DeathItemLossOptions,
@@ -52,13 +51,28 @@ import type { LocationBuilder } from "./location/location.builder.js";
 import type { LocationCreateParametres } from "./location/location.interface.js";
 import type { TitleDefinition } from "./title/title.types.js";
 import packageInfo from "../package.json" with { type: "json" };
+import { LOG_MODES, createLogger, isLogMode, setLogMode, type LogMode } from "./utils/logger.js";
+const log = createLogger("world");
 
-consola.success("🐉 DragonsOfLegends.js loaded successfully!");
-consola.warn(
-  "DragonsOfLegends.js is currently in development; APIs may change.",
-);
+
+let bannerShown = false;
+
+/** Prints the startup banner once per process (respects the log mode). */
+function showBanner(): void {
+  if (bannerShown) return;
+  bannerShown = true;
+  log.success("🐉 DragonsOfLegends.js loaded successfully!");
+  log.warn("DragonsOfLegends.js is currently in development; APIs may change.");
+}
 
 export interface WorldInitializationOptions {
+  /**
+   * Verbosity of the library logs: `"silent"`, `"minimal"` (warnings and errors only), `"normal"` (default) or
+   * `"verbose"` (adds debug messages). Every message is tagged (`[DoL:bank]`...). The setting is process-wide; it can
+   * also be set with the `DOL_LOG_MODE` environment variable or the `--minimal-logs` command-line flag.
+   */
+  logMode?: LogMode;
+
   /**
    * Master switch of the official content (enabled by default). Set it to `false` to start from an empty world and
    * provide everything yourself; the individual `premade*` options still take precedence when set.
@@ -199,6 +213,14 @@ export default class World extends EventEmitter {
   public constructor(initializationOptions: WorldInitializationOptions = {}) {
     super();
 
+    if (initializationOptions.logMode !== undefined) {
+      if (!isLogMode(initializationOptions.logMode)) {
+        throw new RangeError(`Invalid logMode "${String(initializationOptions.logMode)}" (expected ${LOG_MODES.join(", ")}).`);
+      }
+      setLogMode(initializationOptions.logMode);
+    }
+    showBanner();
+
     // Fusion propre des options par défaut et personnalisées
     const officialPack = initializationOptions.officialPack ?? false;
     const premade = officialPack || (initializationOptions.premadeContent ?? true);
@@ -251,10 +273,10 @@ export default class World extends EventEmitter {
     this.lootboxes = new LootboxManager(this.items);
     this.shops = new ShopManager(this.items);
     this.classes = new PlayerClassRegistry();
-    this.events = new EventEngine<GameEvents>({ logger: consola });
+    this.events = new EventEngine<GameEvents>({ logger: createLogger("events") });
     this.achievements = new AchievementManager(this.events, {
       rewardHandler: createPlayerRewardHandler(this),
-      logger: consola,
+      logger: createLogger("achievements"),
     });
     this.jobs = new JobManager();
     this.crafting = new CraftingManager(this);
@@ -396,7 +418,7 @@ export default class World extends EventEmitter {
 
       this.compareVersions(packageName, installedVersion, registryVersion);
     } catch (error) {
-      consola.error("An error occurred while checking for updates.");
+      log.error("An error occurred while checking for updates.");
     }
   }
 
@@ -413,7 +435,7 @@ export default class World extends EventEmitter {
       `https://registry.npmjs.org/${targetPackageName}/latest`,
     );
     if (!registryResponse.ok) {
-      consola.warn("Failed to check for updates from npm registry.");
+      log.warn("Failed to check for updates from npm registry.");
       return undefined;
     }
 
@@ -435,11 +457,11 @@ export default class World extends EventEmitter {
     registryVersion: string,
   ): void {
     if (registryVersion !== installedVersion) {
-      consola.warn(
+      log.warn(
         `A new version of ${targetPackageName} is available: ${registryVersion} (currently installed: ${installedVersion})`,
       );
     } else {
-      consola.info("Package is up to date.");
+      log.info("Package is up to date.");
     }
   }
 
@@ -452,6 +474,6 @@ export default class World extends EventEmitter {
     this.combat.stopAllCombats();
     this.bank.close();
     await this.players.saveAll();
-    consola.info("World state successfully saved and closed.");
+    log.info("World state successfully saved and closed.");
   }
 }

@@ -7,7 +7,6 @@ export interface PlayerDatabaseInterface {
     delete(playerId: string): boolean | Promise<boolean>;
     count(): number | Promise<number>;
 }
-import { consola } from "consola";
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
@@ -16,6 +15,9 @@ import { parseBestiaryState } from "../bestiary/bestiary.types.js";
 import { parsePlayerJobsState } from "../jobs/job.serialization.js";
 import type { PlayerAchievementState } from "../achievements/achievement.types.js";
 import { parsePlayerEffectsState } from "../effects/effect.serialization.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("sqlite");
+
 
 export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
     private readonly databaseInstance: Database.Database;
@@ -33,9 +35,9 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
             this.createTables();
             this.migrateStats();
             this.migratePlayer();
-            consola.success("SQLite player database initialized.");
+            log.success("SQLite player database initialized.");
         } catch (error) {
-            consola.error("Failed to initialize SQLite player database:", error);
+            log.error("Failed to initialize SQLite player database:", error);
             throw error;
         }
     }
@@ -52,7 +54,7 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
 
             saveTransaction();
         } catch (error) {
-            consola.error(`Failed to save data for player ${playerData.id}:`, error);
+            log.error(`Failed to save data for player ${playerData.id}:`, error);
             throw error;
         }
     }
@@ -100,7 +102,7 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
                 attributePoints: statsRecord?.attributePoints ?? 0
             };
         } catch (error) {
-            consola.error(`Failed to retrieve data for player ${playerId}:`, error);
+            log.error(`Failed to retrieve data for player ${playerId}:`, error);
             return undefined;
         }
     }
@@ -120,14 +122,14 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
             const isDeleted = deleteTransaction();
 
             if (isDeleted) {
-                consola.success(`Player ${playerId} deleted from database.`);
+                log.success(`Player ${playerId} deleted from database.`);
             } else {
-                consola.warn(`Attempt to delete non-existent player ${playerId} from database.`);
+                log.warn(`Attempt to delete non-existent player ${playerId} from database.`);
             }
 
             return isDeleted;
         } catch (error) {
-            consola.error(`Failed to delete player ${playerId} from database:`, error);
+            log.error(`Failed to delete player ${playerId} from database:`, error);
             throw error;
         }
     }
@@ -140,7 +142,7 @@ export default class SqlitePlayerAdapter implements PlayerDatabaseInterface {
             const countRecord = this.databaseInstance.prepare("SELECT COUNT(*) AS count FROM Player").get() as CountRecord;
             return countRecord.count;
         } catch (error) {
-            consola.error("Failed to count registered players:", error);
+            log.error("Failed to count registered players:", error);
             return 0;
         }
     }

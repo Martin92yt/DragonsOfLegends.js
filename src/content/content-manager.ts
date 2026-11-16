@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import type { AchievementManager } from "../achievements/achievement.manager.js";
 import type EffectRegistry from "../effects/effect.registry.js";
 import type LootboxManager from "../lootbox/lootbox.manager.js";
@@ -16,6 +15,9 @@ import type TitleManager from "../title/title.manager.js";
 import { DuplicateContentPackError, InvalidContentPackError, MissingPackDependencyError, RegistryLockedError } from "../types/error.js";
 import type World from "../world.js";
 import type { ContentPack, LoadedContentPack, UseContentPackOptions } from "./content-pack.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("content");
+
 
 /**
  * The registries a content pack fills.
@@ -101,13 +103,13 @@ export default class ContentManager {
             pack.setup?.(this.world);
         } catch (error) {
             for (const revert of undo.reverse()) revert();
-            consola.error(`Content pack "${pack.id}" rolled back.`);
+            log.error(`Content pack "${pack.id}" rolled back.`);
             throw error;
         }
 
         const loaded: LoadedContentPack = { id: pack.id, name: pack.name ?? pack.id, version: pack.version, counts };
         this.packs.set(pack.id, loaded);
-        consola.success(`Content pack "${loaded.name}" loaded.`);
+        log.success(`Content pack "${loaded.name}" loaded.`);
         // Fire-and-forget: use() is synchronous, so asynchronous listeners are not awaited.
         this.world.events.emit("contentPackLoad", { world: this.world, pack: loaded });
         return loaded;

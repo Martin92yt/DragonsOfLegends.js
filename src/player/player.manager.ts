@@ -6,11 +6,13 @@ import {
 } from "./player.interface.js";
 import PlayerDatabase from "./player.database.js";
 import Player from "./player.entity.js";
-import { consola } from "consola";
 import World from "../world.js";
 import { PlayerAlreadyExistsError } from "../types/error.js";
 import { InventoryEntity } from "../inventory/inventory.js";
 import type { ItemQuantity } from "../events/game.events.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("players");
+
 
 export default class PlayerManager {
   private static readonly INACTIVITY_TIME_MS = 15 * 60 * 1000;
@@ -99,7 +101,7 @@ export default class PlayerManager {
     // Credits the ticks and expirations that elapsed while the player was unloaded.
     await playerInstance.effects.sync();
     this.refreshUnloadTimer(playerData.id);
-    consola.debug(`Player ${playerData.id} loaded into cache.`);
+    log.debug(`Player ${playerData.id} loaded into cache.`);
     await this.world.events.emitAsync("playerLoad", {
       playerId: playerData.id,
       player: playerInstance,
@@ -115,7 +117,7 @@ export default class PlayerManager {
     const { id: playerId, name: playerName, playerClass } = creationOptions;
 
     if (await this.exist(playerId)) {
-      consola.warn(`Attempt to create already existing player ${playerId}.`);
+      log.warn(`Attempt to create already existing player ${playerId}.`);
       throw new PlayerAlreadyExistsError(playerId);
     }
 
@@ -137,7 +139,7 @@ export default class PlayerManager {
     await this.save(newPlayerInstance);
     const starterItems = await this.grantStarterItems(newPlayerInstance);
     this.refreshUnloadTimer(playerId);
-    consola.success(`Player ${playerId} created.`);
+    log.success(`Player ${playerId} created.`);
     await this.world.events.emitAsync("playerCreate", {
       playerId,
       player: newPlayerInstance,
@@ -186,7 +188,7 @@ export default class PlayerManager {
     )) {
       const item = this.world.items.get(itemId);
       if (!item) {
-        consola.debug(
+        log.debug(
           `Starter item "${itemId}" is not registered in the item catalogue; skipped.`,
         );
         continue;
@@ -208,7 +210,7 @@ export default class PlayerManager {
           playerInstance.health.current + amount,
         );
 
-        consola.debug(
+        log.debug(
           `Player ${playerId} regenerated health: ${oldHealth} -> ${playerInstance.health.current}/${playerInstance.health.max}`,
         );
       }
@@ -237,7 +239,7 @@ export default class PlayerManager {
     this.activePlayersMap.delete(playerId);
     const player = cachedPlayer ?? (await this.get(playerId));
     if (!player) {
-      consola.warn(
+      log.warn(
         `Failed to delete non-existent player ${playerId} from database.`,
       );
       return false;
@@ -254,10 +256,10 @@ export default class PlayerManager {
     this.activePlayersMap.delete(playerId);
 
     if (isDeleted) {
-      consola.info(`Player ${playerId} deleted.`);
+      log.info(`Player ${playerId} deleted.`);
       await this.world.events.emitAsync("playerDelete", { playerId, player });
     } else {
-      consola.warn(
+      log.warn(
         `Failed to delete non-existent player ${playerId} from database.`,
       );
     }
@@ -277,7 +279,7 @@ export default class PlayerManager {
     const playerInstance = this.activePlayersMap.get(playerId);
 
     if (!playerInstance) {
-      consola.warn(`Attempt to remove non-cached player ${playerId}.`);
+      log.warn(`Attempt to remove non-cached player ${playerId}.`);
       this.clearUnloadTimer(playerId);
       return;
     }
@@ -332,7 +334,7 @@ export default class PlayerManager {
         achievements,
       });
     } catch (error) {
-      consola.warn(`Ignoring the unreadable achievements of ${playerId}.`, error);
+      log.warn(`Ignoring the unreadable achievements of ${playerId}.`, error);
     }
   }
 
@@ -385,6 +387,6 @@ export default class PlayerManager {
       this.clearUnloadTimer(playerId);
     }
 
-    consola.success("All players saved.");
+    log.success("All players saved.");
   }
 }

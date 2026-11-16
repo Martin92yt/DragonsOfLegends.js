@@ -2,11 +2,13 @@ import EnemyManager from "../enemy/enemy.manager.js";
 import type EnemyRegistry from "../enemy/enemy.registry.js";
 import type { EnemySpawnRule } from "../enemy/enemy.definition.js";
 import PlayerEntity from "../player/player.entity.js";
-import { consola } from "consola";
 import Combat from "./combat.js";
 import { CombatResult } from "../types/result.js";
 import { PlayerAlreadyInCombatError, PlayerNotInCombatError } from "../types/error.js";
 import EnemyEntity from "../enemy/enemy.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("combat");
+
 
 export default class CombatManager {
     private readonly activeCombatMap = new Map<string, Combat>();
@@ -29,7 +31,7 @@ export default class CombatManager {
     private ensurePlayerNotInCombat(playerEntity: PlayerEntity): void {
         const existingCombatInstance = this.activeCombatMap.get(playerEntity.id);
         if (existingCombatInstance && !existingCombatInstance.isFinished()) {
-            consola.warn(`Combat start failed: player ${playerEntity.name} (${playerEntity.id}) is already in combat.`);
+            log.warn(`Combat start failed: player ${playerEntity.name} (${playerEntity.id}) is already in combat.`);
             throw new PlayerAlreadyInCombatError(playerEntity.id);
         }
     }
@@ -42,7 +44,7 @@ export default class CombatManager {
         const newCombatInstance = new Combat(playerEntity, enemyEntity);
         playerEntity.inCombat = true;
         this.activeCombatMap.set(playerEntity.id, newCombatInstance);
-        consola.success(`Combat started for ${playerEntity.name}.`);
+        log.success(`Combat started for ${playerEntity.name}.`);
         // Fire-and-forget: combat start is synchronous, so asynchronous listeners are not awaited.
         playerEntity.worldInstance.events.emit("combatStart", {
             playerId: playerEntity.id,
@@ -78,7 +80,7 @@ export default class CombatManager {
         this.resolvePlayer?.(targetPlayerId)?.assertCanAct("combat.attack");
         const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
         if (!activeCombatInstance) {
-            consola.warn(`Attack failed: player with ID ${targetPlayerId} is not in combat.`);
+            log.warn(`Attack failed: player with ID ${targetPlayerId} is not in combat.`);
             throw new PlayerNotInCombatError(targetPlayerId);
         }
 
@@ -110,7 +112,7 @@ export default class CombatManager {
     public get(targetPlayerId: string): Combat | undefined {
         const activeCombatInstance = this.activeCombatMap.get(targetPlayerId);
         if (!activeCombatInstance) {
-            consola.warn(`Failed to retrieve active combat for player ID ${targetPlayerId}.`);
+            log.warn(`Failed to retrieve active combat for player ID ${targetPlayerId}.`);
         }
         return activeCombatInstance;
     }
@@ -151,6 +153,6 @@ export default class CombatManager {
             });
         }
         this.activeCombatMap.clear();
-        consola.success("All active combats stopped.");
+        log.success("All active combats stopped.");
     }
 }

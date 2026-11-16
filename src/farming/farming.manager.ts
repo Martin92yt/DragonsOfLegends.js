@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import { countAvailable } from "../inventory/item-stacks.js";
 import type PlayerEntity from "../player/player.entity.js";
 import { FarmingError, CropNotReadyError, MissingIngredientsError, RecipeLevelTooLowError } from "../types/error.js";
@@ -17,6 +16,9 @@ import {
     type PlantResult,
     type PlotView
 } from "./crop.types.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("farming");
+
 
 /**
  * Farming engine of the farmer job: plant seeds on plots, wait for the crops to grow, harvest them.
@@ -114,7 +116,7 @@ export default class FarmingManager extends CropRegistry {
             if (!(await player.inventory.remove(crop.seed.itemId, 1))) throw new MissingIngredientsError([{ itemId: crop.seed.itemId, required: 1, available: 0 }]);
             player.farm.set(plot, { cropId, plantedAt: now, readyAt });
             await this.world.players.save(player);
-            consola.success(`${player.name} planted ${cropId} on plot ${plot}.`);
+            log.success(`${player.name} planted ${cropId} on plot ${plot}.`);
             return { planted: true, cropId, plot, readyAt };
         });
     }
@@ -151,7 +153,7 @@ export default class FarmingManager extends CropRegistry {
             for (const gain of gains) if (gain.quantity > 0) await player.inventory.add(gain.item, gain.quantity);
             player.farm.clear(plot);
             await this.world.players.save(player);
-            consola.success(`${player.name} harvested ${crop.id} on plot ${plot}.`);
+            log.success(`${player.name} harvested ${crop.id} on plot ${plot}.`);
             return { crop, harvested: true as const, harvest };
         });
 

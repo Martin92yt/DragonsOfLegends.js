@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { consola } from "consola";
+import { createLogger } from "../src/utils/logger.js";
 
 import SqlitePlayerAdapter from "../src/adapters/sqlite-player.adapter.js";
 import BankClass from "../src/economy/bank.js";
@@ -82,7 +82,7 @@ describe("World", () => {
 
     it("warns when a newer version exists", async (t) => {
         stubRegistry(t, async () => registryResponse(FUTURE_VERSION));
-        const warn = t.mock.method(consola, "warn");
+        const warn = t.mock.method(createLogger("world"), "warn");
         await createWorld().checkForUpdates();
         assert.ok(warn.mock.calls.some((call: { arguments: readonly unknown[] }) => String(call.arguments[0]).includes(FUTURE_VERSION)));
     });
@@ -90,7 +90,7 @@ describe("World", () => {
     it("reports an up-to-date package", async (t) => {
         const { version } = JSON.parse(readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8")) as { version: string };
         stubRegistry(t, async () => registryResponse(version));
-        const info = t.mock.method(consola, "info");
+        const info = t.mock.method(createLogger("world"), "info");
         await createWorld().checkForUpdates();
         assert.ok(info.mock.calls.some((call: { arguments: readonly unknown[] }) => /up to date/i.test(String(call.arguments[0]))));
     });
@@ -98,7 +98,7 @@ describe("World", () => {
     it("survives registry failures (HTTP error and network error)", async (t) => {
         const world = createWorld();
         stubRegistry(t, async () => new Response("nope", { status: 500 }));
-        const warn = t.mock.method(consola, "warn");
+        const warn = t.mock.method(createLogger("world"), "warn");
         await assert.doesNotReject(world.checkForUpdates());
         assert.ok(warn.mock.calls.length >= 1);
 
@@ -106,7 +106,7 @@ describe("World", () => {
         stubRegistry(t, async () => {
             throw new Error("offline");
         });
-        const error = t.mock.method(consola, "error");
+        const error = t.mock.method(createLogger("world"), "error");
         await assert.doesNotReject(world.checkForUpdates());
         assert.ok(error.mock.calls.length >= 1);
     });

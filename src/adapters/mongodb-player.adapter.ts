@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import { MongoClient, Collection, Db } from "mongodb";
 import { PlayerData } from "../player/player.interface.js";
 export interface PlayerDatabaseInterface {
@@ -8,6 +7,9 @@ export interface PlayerDatabaseInterface {
     count(): number | Promise<number>;
 }
 import PlayerManager from "../player/player.manager.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("mongodb");
+
 
 export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
     private client!: MongoClient;
@@ -29,9 +31,9 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
             this.db = this.client.db(dbName);
             this.playersCollection = this.db.collection<PlayerData>("players");
             this.isConnected = true;
-            consola.success("MongoDB player database initialized.");
+            log.success("MongoDB player database initialized.");
         } catch (error) {
-            consola.error("Failed to initialize MongoDB player database:", error);
+            log.error("Failed to initialize MongoDB player database:", error);
             throw error;
         }
     }
@@ -44,7 +46,7 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
                 { upsert: true }
             );
         } catch (error) {
-            consola.error(`Failed to save player ${playerData.id} to MongoDB:`, error);
+            log.error(`Failed to save player ${playerData.id} to MongoDB:`, error);
             throw error;
         }
     }
@@ -59,7 +61,7 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
             const { _id, ...playerData } = doc as any;
             return playerData as PlayerData;
         } catch (error) {
-            consola.error(`Failed to retrieve player ${playerId} from MongoDB:`, error);
+            log.error(`Failed to retrieve player ${playerId} from MongoDB:`, error);
             return undefined;
         }
     }
@@ -69,7 +71,7 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
             const result = await this.playersCollection.deleteOne({ id: playerId });
             return (result.deletedCount ?? 0) > 0;
         } catch (error) {
-            consola.error(`Failed to delete player ${playerId} from MongoDB:`, error);
+            log.error(`Failed to delete player ${playerId} from MongoDB:`, error);
             return false;
         }
     }
@@ -78,7 +80,7 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
         try {
             return await this.playersCollection.countDocuments();
         } catch (error) {
-            consola.error("Failed to count players in MongoDB:", error);
+            log.error("Failed to count players in MongoDB:", error);
             return 0;
         }
     }
@@ -91,9 +93,9 @@ export default class MongoPlayerAdapter implements PlayerDatabaseInterface {
         try {
             await this.client.close();
             this.isConnected = false;
-            consola.success("MongoDB player database closed.");
+            log.success("MongoDB player database closed.");
         } catch (error) {
-            consola.error("Error while closing MongoDB player database:", error);
+            log.error("Error while closing MongoDB player database:", error);
         }
     }
 }

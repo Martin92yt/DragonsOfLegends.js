@@ -1,5 +1,7 @@
-import { consola } from "consola";
 import { Item } from "../inventory/inventory.interface.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("enemy");
+
 
 export interface EnemyStats {
     name: string;
@@ -46,7 +48,7 @@ export default class EnemyEntity {
 
     public takeDamage(incomingDamage: number): number {
         if (incomingDamage < 0) {
-            consola.warn(`Invalid negative damage value (${incomingDamage}) applied to enemy ${this.name}.`);
+            log.warn(`Invalid negative damage value (${incomingDamage}) applied to enemy ${this.name}.`);
             return 0;
         }
 
@@ -70,7 +72,7 @@ export default class EnemyEntity {
 
     public heal(restoreAmount: number): number {
         if (restoreAmount < 0) {
-            consola.warn(`Invalid negative heal amount (${restoreAmount}) applied to enemy ${this.name}.`);
+            log.warn(`Invalid negative heal amount (${restoreAmount}) applied to enemy ${this.name}.`);
             return this.health;
         }
 
@@ -91,7 +93,7 @@ export default class EnemyEntity {
 
     public get healthRatio(): number {
         if (this.maxHealth <= 0) {
-            consola.warn(`Enemy ${this.name} has invalid maxHealth (${this.maxHealth}); healthRatio defaulted to 0.`);
+            log.warn(`Enemy ${this.name} has invalid maxHealth (${this.maxHealth}); healthRatio defaulted to 0.`);
             return 0;
         }
         return this.health / this.maxHealth;
@@ -111,7 +113,7 @@ export default class EnemyEntity {
             }
         }
 
-        consola.success(`Rolled ${droppedItemsList.length} drops for ${this.name}.`);
+        log.success(`Rolled ${droppedItemsList.length} drops for ${this.name}.`);
         return droppedItemsList;
     }
 }

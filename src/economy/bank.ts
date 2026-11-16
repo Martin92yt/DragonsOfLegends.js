@@ -2,9 +2,11 @@ import PlayerEntity from "../player/player.entity.js";
 import AsyncQueue from "../utils/async-queue.js";
 import { BankLimitReachedError, BankLockedError, BankMaxLevelError, InsufficientFundsError, InvalidAmountError } from "../types/error.js";
 import { BankResult } from "../types/result.js";
-import { consola } from "consola";
 import World from "../world.js";
 import { bankUpgradeCost, resolveBankUpgradeConfig } from "./bank-upgrade.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("bank");
+
 
 export default class BankClass {
     public readonly worldInstance: World;
@@ -27,7 +29,7 @@ export default class BankClass {
     private async getPlayerById(playerIdentifier: string): Promise<PlayerEntity | undefined> {
         const foundPlayerEntity = await this.worldInstance.players.get(playerIdentifier);
         if (!foundPlayerEntity) {
-            consola.warn(`Failed to find player with identifier ${playerIdentifier} in bank system.`);
+            log.warn(`Failed to find player with identifier ${playerIdentifier} in bank system.`);
         }
         return foundPlayerEntity;
     }
@@ -37,12 +39,12 @@ export default class BankClass {
      */
     private validateTransaction(playerEntity: PlayerEntity, transactionAmount: number, actionName: string): void {
         if (!playerEntity.bankUnlocked) {
-            consola.warn(`${actionName} failed: bank is locked for player ${playerEntity.name}.`);
+            log.warn(`${actionName} failed: bank is locked for player ${playerEntity.name}.`);
             throw new BankLockedError();
         }
 
         if (transactionAmount <= 0) {
-            consola.warn(`${actionName} failed for ${playerEntity.name}: invalid amount ${transactionAmount}.`);
+            log.warn(`${actionName} failed for ${playerEntity.name}: invalid amount ${transactionAmount}.`);
             throw new InvalidAmountError(`${actionName} amount must be greater than 0.`);
         }
     }
@@ -127,7 +129,7 @@ export default class BankClass {
             if (previousLevel >= config.maxLevel) throw new BankMaxLevelError(config.maxLevel);
             const cost = bankUpgradeCost(config, previousLevel);
             if (playerEntity.gold < cost) {
-                consola.warn(`Bank upgrade failed for ${playerEntity.name}: insufficient gold (${playerEntity.gold}/${cost}).`);
+                log.warn(`Bank upgrade failed for ${playerEntity.name}: insufficient gold (${playerEntity.gold}/${cost}).`);
                 throw new InsufficientFundsError(`Not enough gold to upgrade the bank (${cost} required).`);
             }
 
@@ -150,7 +152,7 @@ export default class BankClass {
             if (playerEntity.bankLevel !== previousLevel || playerEntity.gold < cost) return false;
             playerEntity.gold -= cost;
             playerEntity.bankLevel = level;
-            consola.success(`${playerEntity.name} upgraded their bank to level ${level} for ${cost} gold.`);
+            log.success(`${playerEntity.name} upgraded their bank to level ${level} for ${cost} gold.`);
             await this.worldInstance.players.save(playerEntity);
             return true;
         });
@@ -166,14 +168,14 @@ export default class BankClass {
         await this.transactions.run(async () => {
             playerEntity.assertCanAct("bank.deposit"); // re-checked: the player may have died while queued
             if (playerEntity.gold < depositAmount) {
-                consola.warn(`Deposit failed for ${playerEntity.name}: insufficient wallet funds (${playerEntity.gold}/${depositAmount}).`);
+                log.warn(`Deposit failed for ${playerEntity.name}: insufficient wallet funds (${playerEntity.gold}/${depositAmount}).`);
                 throw new InsufficientFundsError("Not enough gold in wallet.");
             }
 
             const effectiveLimit = this.getGoldLimit(playerEntity);
 
             if (effectiveLimit !== -1 && (playerEntity.bankGold + depositAmount) > effectiveLimit) {
-                consola.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);
+                log.warn(`Deposit failed for ${playerEntity.name}: bank limit reached (Max: ${effectiveLimit}, Current: ${playerEntity.bankGold}, Trying to add: ${depositAmount}).`);
                 throw new BankLimitReachedError(effectiveLimit);
             }
 
@@ -181,7 +183,7 @@ export default class BankClass {
             playerEntity.bankGold += depositAmount;
         });
 
-        consola.success(`${playerEntity.name} deposited ${depositAmount} gold.`);
+        log.success(`${playerEntity.name} deposited ${depositAmount} gold.`);
         await this.worldInstance.events.emitAsync("bankDeposit", {
             playerId: playerEntity.id,
             player: playerEntity,
@@ -204,7 +206,7 @@ export default class BankClass {
             playerEntity.assertCanAct("bank.withdraw"); // re-checked: the player may have died while queued
             const totalBankBeforeWithdrawal = await this.getBalanceTotal(playerEntity);
             if (totalBankBeforeWithdrawal < withdrawalAmount) {
-                consola.warn(`Withdrawal failed for ${playerEntity.name}: insufficient bank funds (${totalBankBeforeWithdrawal}/${withdrawalAmount}).`);
+                log.warn(`Withdrawal failed for ${playerEntity.name}: insufficient bank funds (${totalBankBeforeWithdrawal}/${withdrawalAmount}).`);
                 throw new InsufficientFundsError("Not enough gold in the bank.");
             }
 
@@ -225,7 +227,7 @@ export default class BankClass {
         });
         const totalBankAfterWithdrawal = await this.getBalanceTotal(playerEntity);
 
-        consola.success(`${playerEntity.name} withdrew ${withdrawalAmount} gold.`);
+        log.success(`${playerEntity.name} withdrew ${withdrawalAmount} gold.`);
         await this.worldInstance.events.emitAsync("bankWithdraw", {
             playerId: playerEntity.id,
             player: playerEntity,
@@ -242,7 +244,7 @@ export default class BankClass {
      */
     public async solde(playerEntity: PlayerEntity): Promise<BankResult> {
         if (!playerEntity.bankUnlocked) {
-            consola.warn(`Balance check failed: bank is locked for player ${playerEntity.name}.`);
+            log.warn(`Balance check failed: bank is locked for player ${playerEntity.name}.`);
             throw new BankLockedError();
         }
 
@@ -255,7 +257,7 @@ export default class BankClass {
     public unlock(playerEntity: PlayerEntity): boolean {
         playerEntity.assertCanAct("bank.unlock");
         if (playerEntity.bankUnlocked) {
-            consola.warn(`Bank unlock skipped: account is already unlocked for ${playerEntity.name}.`);
+            log.warn(`Bank unlock skipped: account is already unlocked for ${playerEntity.name}.`);
             return false;
         }
 
@@ -263,16 +265,16 @@ export default class BankClass {
 
         if (unlockCost > 0) {
             if (playerEntity.gold < unlockCost) {
-                consola.warn(`Failed to unlock bank for ${playerEntity.name}: insufficient gold (requires ${unlockCost}, has ${playerEntity.gold}).`);
+                log.warn(`Failed to unlock bank for ${playerEntity.name}: insufficient gold (requires ${unlockCost}, has ${playerEntity.gold}).`);
                 return false;
             }
 
             playerEntity.gold -= unlockCost;
-            consola.success(`${playerEntity.name} paid ${unlockCost} gold to unlock their bank account.`);
+            log.success(`${playerEntity.name} paid ${unlockCost} gold to unlock their bank account.`);
         }
 
         playerEntity.bankUnlocked = true;
-        consola.success(`Bank account unlocked for ${playerEntity.name}.`);
+        log.success(`Bank account unlocked for ${playerEntity.name}.`);
         // Fire-and-forget: unlock is synchronous, so asynchronous listeners are not awaited.
         this.worldInstance.events.emit("bankUnlock", { playerId: playerEntity.id, player: playerEntity, cost: unlockCost });
         return true;
@@ -282,6 +284,6 @@ export default class BankClass {
      * Closes the banking system and logs a success message.
      */
     public close(): void {
-        consola.success("Banking system closed.");
+        log.success("Banking system closed.");
     }
 }

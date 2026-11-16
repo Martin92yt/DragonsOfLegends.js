@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import type EnemyEntity from "../enemy/enemy.js";
 import type { InventoryItemRecord } from "../inventory/inventory.interface.js";
 import { countAvailable } from "../inventory/item-stacks.js";
@@ -19,6 +18,9 @@ import {
     type EnchantResult,
     type EnchantTarget
 } from "./enchantment.types.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("enchanting");
+
 
 /**
  * Enchanting engine: applies enchantments on items (cost in items, gold and/or player experience, gated by the
@@ -141,7 +143,7 @@ export default class EnchantingManager extends EnchantmentRegistry {
         freshRecord.itemNbtData = { ...(freshRecord.itemNbtData ?? {}), [ENCHANTMENTS_NBT_KEY]: { ...current, [enchantmentId]: level } };
         await player.inventory.save(fresh);
         await this.world.players.save(player);
-        consola.success(`${player.name} enchanted ${record.itemId} with ${enchantmentId} ${level}.`);
+        log.success(`${player.name} enchanted ${record.itemId} with ${enchantmentId} ${level}.`);
         return { enchanted: true, cancelled: false, level, ...result };
     }
 
@@ -202,7 +204,7 @@ export default class EnchantingManager extends EnchantmentRegistry {
                 // The hook type is selected by the key; the extended context matches it by construction.
                 await (definition.hooks?.[hook] as ((value: object) => void | Promise<void>) | undefined)?.(extend(context));
             } catch (error) {
-                consola.error(`Enchantment "${definition.id}" failed in ${hook}.`, error);
+                log.error(`Enchantment "${definition.id}" failed in ${hook}.`, error);
             }
         }
         if (dirty) await player.inventory.save(records);

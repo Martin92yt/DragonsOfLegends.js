@@ -1,10 +1,12 @@
-import { consola } from "consola";
 import Player from "../player/player.entity.js";
 import { NoEnemyAvailableError } from "../types/error.js";
 import { DEFAULT_ENEMY_SPAWN_RULES, type EnemyDefinition, type EnemySpawnRule } from "./enemy.definition.js";
 import EnemyRegistry from "./enemy.registry.js";
 import { registerOfficialEnemies } from "./official-enemies.js";
 import Enemy from "./enemy.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("enemy");
+
 
 /**
  * Creates the enemies met by players, from the enemy registry.
@@ -57,7 +59,7 @@ export default class EnemyManager {
     public createOfType(enemyType: string, playerLevel = 1): Enemy {
         const definition = this.registry.get(enemyType);
         if (!definition) {
-            consola.error(`Failed to create enemy: unknown enemy type ${enemyType}.`);
+            log.error(`Failed to create enemy: unknown enemy type ${enemyType}.`);
             return new Enemy(enemyType, "Unknown Enemy", 50, 50, 5, 2, 10, 5);
         }
 
@@ -73,7 +75,7 @@ export default class EnemyManager {
         const scaledExperienceReward = this.calculateStat(definition.experience, statScalingMultiplier * rewardMultiplier);
         const scaledGoldReward = this.calculateStat(definition.gold, statScalingMultiplier * rewardMultiplier);
 
-        consola.success(`Spawned enemy: ${resolvedEnemyName} (Lv. ${playerLevel}).`);
+        log.success(`Spawned enemy: ${resolvedEnemyName} (Lv. ${playerLevel}).`);
 
         return new Enemy(
             definition.id,
@@ -112,7 +114,7 @@ export default class EnemyManager {
 
         const everyEnemy = this.registry.list();
         if (everyEnemy.length === 0) throw new NoEnemyAvailableError();
-        consola.warn(`No enemy registered for tier "${tier ?? "?"}"; picking among every registered enemy.`);
+        log.warn(`No enemy registered for tier "${tier ?? "?"}"; picking among every registered enemy.`);
         return everyEnemy;
     }
 
@@ -125,7 +127,7 @@ export default class EnemyManager {
     private pickTier(playerLevel: number): string | undefined {
         const firstRule = this.spawnRules[0];
         if (playerLevel < 1) {
-            consola.warn(`Invalid player level ${playerLevel} encountered; defaulting pool to the first tier.`);
+            log.warn(`Invalid player level ${playerLevel} encountered; defaulting pool to the first tier.`);
             return firstRule ? Object.keys(firstRule.tiers)[0] : undefined;
         }
 

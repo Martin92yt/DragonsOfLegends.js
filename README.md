@@ -261,6 +261,25 @@ Opt-in with `officialPack: true`, `premadeCrafting: true` or `world.loadOfficial
 - **Farming** (`world.farming`): `plant(player, "wheat", plot)` then, once grown, `harvest(player, plot)`. Growth is shortened by the farmer level, and plots are unlocked as the farmer levels up. Harvests give consumables (healing) and ingredients.
 - **Enchanting** (`world.enchanting`): `enchant(player, { itemId, slot }, "lifesteal")`. Costs items, gold and/or experience and needs the enchanter level. Official enchantments: **Lifesteal** (heals 3% of the enemy's health per blow, per level) and **Mending** (experience gained repairs the worn item). Add your own with `hooks: { onAttack, onExperienceGain }`.
 
+### Logging
+
+Every message of the library is tagged (`[DoL:bank]`, `[DoL:combat]`, `[DoL:events]`...) through `consola` tags, so it can be filtered and attributed. The verbosity is controlled by a **log mode**:
+
+| Mode | Shows |
+| --- | --- |
+| `"silent"` | nothing |
+| `"minimal"` | warnings and errors only |
+| `"normal"` (default) | also success and information messages |
+| `"verbose"` | also debug messages |
+
+```ts
+const world = new World({ logMode: "minimal" });   // option
+// DOL_LOG_MODE=minimal node game.js                // environment variable
+// node game.js --minimal-logs                      // command-line flag
+```
+
+The mode is process-wide (`setLogMode(...)` changes it at runtime). Your own code can reuse the same logger with `createLogger("my-module")`.
+
 ### Death rules
 
 Choose how death works with `deathMode`:

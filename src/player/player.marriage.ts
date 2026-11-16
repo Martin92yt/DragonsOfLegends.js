@@ -1,7 +1,9 @@
 import Database from "better-sqlite3";
 import PlayerEntity from "./player.entity.js";
-import consola from "consola";
 import { InvalidPartnerError } from "../types/error.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("marriage");
+
 
 export default class PlayerMarriage {
     private partnerId: string;
@@ -99,12 +101,12 @@ export default class PlayerMarriage {
                 if (freedPlayerId !== newPartnerId && freedPlayerId !== this.player.id) this.syncCachedPlayer(freedPlayerId, "");
             }
             this.syncCachedPlayer(newPartnerId, this.player.id);
-            consola.success(`Player ${this.player.id} married ${newPartnerId}.`);
+            log.success(`Player ${this.player.id} married ${newPartnerId}.`);
             // Fire-and-forget: setPartner is synchronous, so asynchronous listeners are not awaited.
             this.player.worldInstance.events.emit("marriageStart", { playerId: this.player.id, player: this.player, partnerId: newPartnerId });
             return this;
         } catch (error) {
-            consola.error(`Failed to set marriage for player ${this.player.id}:`, error);
+            log.error(`Failed to set marriage for player ${this.player.id}:`, error);
             throw error;
         }
     }
@@ -124,10 +126,10 @@ export default class PlayerMarriage {
             const formerPartnerId = this.partnerId;
             this.partnerId = "";
             this.syncCachedPlayer(formerPartnerId, "");
-            consola.info(`Player ${this.player.id} divorced.`);
+            log.info(`Player ${this.player.id} divorced.`);
             this.player.worldInstance.events.emit("marriageDivorce", { playerId: this.player.id, player: this.player, formerPartnerId });
         } catch (error) {
-            consola.error(`Failed to process divorce for player ${this.player.id}:`, error);
+            log.error(`Failed to process divorce for player ${this.player.id}:`, error);
             throw error;
         }
     }

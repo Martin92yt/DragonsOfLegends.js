@@ -1,6 +1,5 @@
 import { LocationFlags, hasFlag } from "./location.flags.js";
 import { LocationCreateParametres, LocationCreateResult, LocationLinkSpec } from "./location.interface.js";
-import { consola } from "consola";
 import { LocationBuilder } from "./location.builder.js";
 import {
     BoatWaterFlagRequiredError,
@@ -13,6 +12,9 @@ import {
     SelfConnectionError,
     UnreachableLocationsError
 } from "../types/error.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("location");
+
 
 type TransportMode = "landRoutes" | "boatRoutes";
 type LocationConnection = LocationCreateResult["travelConnections"][TransportMode];
@@ -87,7 +89,7 @@ export default class LocationManager {
      */
     public create(creationParameters: LocationCreateParametres): LocationCreateResult {
         if (this.locationsMap.has(creationParameters.locationId)) {
-            consola.error(`Attempt to create already existing location: ${creationParameters.locationId}`);
+            log.error(`Attempt to create already existing location: ${creationParameters.locationId}`);
             throw new LocationAlreadyExistsError(creationParameters.locationId);
         }
 
@@ -131,7 +133,7 @@ export default class LocationManager {
         const targetLocation = this.locationsMap.get(targetLocationId);
 
         if (!sourceLocation || !targetLocation) {
-            consola.error(`Failed to link non-existent locations: ${sourceLocationId} -> ${targetLocationId}`);
+            log.error(`Failed to link non-existent locations: ${sourceLocationId} -> ${targetLocationId}`);
             throw new LocationInexistentLinkError(sourceLocationId, targetLocationId);
         }
 
@@ -200,7 +202,7 @@ export default class LocationManager {
         }
 
         this.validate();
-        consola.success(`Deserialized ${parsedLocations.length} locations.`);
+        log.success(`Deserialized ${parsedLocations.length} locations.`);
     }
 
     /**
@@ -213,7 +215,7 @@ export default class LocationManager {
 
         this.validateConnections();
         this.validateReachability(startingCityLocation.locationId);
-        consola.success(`Validated ${this.locationsMap.size} locations.`);
+        log.success(`Validated ${this.locationsMap.size} locations.`);
     }
 
     /**
@@ -227,13 +229,13 @@ export default class LocationManager {
         );
 
         if (starterCityList.length === 0) {
-            consola.error("No starting city defined in the location graph.");
+            log.error("No starting city defined in the location graph.");
             throw new NoStartingCityError();
         }
 
         if (starterCityList.length > 1) {
             const cityIds = starterCityList.map(locationRecord => locationRecord.locationId);
-            consola.error(`Multiple starting cities found: ${cityIds.join(", ")}`);
+            log.error(`Multiple starting cities found: ${cityIds.join(", ")}`);
             throw new MultipleStartingCitiesError(cityIds);
         }
 
@@ -266,14 +268,14 @@ export default class LocationManager {
         const targetLocationId = connectionRecord.destinationLocationId;
 
         if (targetLocationId === sourceLocation.locationId) {
-            consola.error(`Location ${sourceLocation.locationId} has a self-connection on ${transportMode}.`);
+            log.error(`Location ${sourceLocation.locationId} has a self-connection on ${transportMode}.`);
             throw new SelfConnectionError(sourceLocation.locationId, transportMode);
         }
 
         const targetLocation = this.locationsMap.get(targetLocationId);
 
         if (!targetLocation) {
-            consola.error(`Location ${sourceLocation.locationId} connects to non-existent target ${targetLocationId} on ${transportMode}.`);
+            log.error(`Location ${sourceLocation.locationId} connects to non-existent target ${targetLocationId} on ${transportMode}.`);
             throw new InvalidConnectionTargetError(sourceLocation.locationId, transportMode, targetLocationId);
         }
 
@@ -282,7 +284,7 @@ export default class LocationManager {
         );
 
         if (!isReciprocal) {
-            consola.error(`Non-reciprocal connection between ${sourceLocation.locationId} and ${targetLocation.locationId} on ${transportMode}.`);
+            log.error(`Non-reciprocal connection between ${sourceLocation.locationId} and ${targetLocation.locationId} on ${transportMode}.`);
             throw new NonReciprocalConnectionError(transportMode, sourceLocation.locationId, targetLocation.locationId);
         }
 
@@ -290,7 +292,7 @@ export default class LocationManager {
             transportMode === "boatRoutes" &&
             (!hasFlag(sourceLocation.locationFlags, LocationFlags.OnWater) || !hasFlag(targetLocation.locationFlags, LocationFlags.OnWater))
         ) {
-            consola.error(`Boat connection requires water flags between ${sourceLocation.locationId} and ${targetLocationId}.`);
+            log.error(`Boat connection requires water flags between ${sourceLocation.locationId} and ${targetLocationId}.`);
             throw new BoatWaterFlagRequiredError(sourceLocation.locationId, targetLocationId);
         }
     }
@@ -335,7 +337,7 @@ export default class LocationManager {
 
         if (unreachableLocations.length > 0) {
             const unreachableIds = unreachableLocations.map(locationRecord => locationRecord.locationId);
-            consola.error(`Unreachable locations detected: ${unreachableIds.join(", ")}`);
+            log.error(`Unreachable locations detected: ${unreachableIds.join(", ")}`);
             throw new UnreachableLocationsError(unreachableIds);
         }
     }

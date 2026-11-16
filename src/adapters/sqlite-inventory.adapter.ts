@@ -6,13 +6,15 @@ export interface PlayerDatabaseInterface {
     count(): number | Promise<number>;
 }
 
-import { consola } from "consola";
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
 import { InventoryEntity } from "../inventory/inventory.js";
 import { PlayerData } from "../player/player.interface.js";
 import { EQUIPMENT_RECORD_KEYS, EquipmentRecord, InventoryItemRecord } from "../inventory/inventory.interface.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("sqlite");
+
 
 interface InventoryRow {
     playerId: string;
@@ -51,9 +53,9 @@ export default class SqliteInventoryAdapter {
             this.databaseInstance.pragma("foreign_keys = ON");
             this.createTables();
             this.prepareStatements();
-            consola.success("SQLite inventory database initialized.");
+            log.success("SQLite inventory database initialized.");
         } catch (initializationError) {
-            consola.error("Failed to initialize SQLite inventory database:", initializationError);
+            log.error("Failed to initialize SQLite inventory database:", initializationError);
             throw initializationError;
         }
     }
@@ -75,7 +77,7 @@ export default class SqliteInventoryAdapter {
 
                 for (const itemRecord of inventoryItems) {
                     if (!itemRecord.itemId || itemRecord.quantity <= 0) {
-                        consola.warn(`Skipping invalid inventory item for player ${playerId}: ${itemRecord.itemId}`);
+                        log.warn(`Skipping invalid inventory item for player ${playerId}: ${itemRecord.itemId}`);
                         continue;
                     }
 
@@ -97,7 +99,7 @@ export default class SqliteInventoryAdapter {
 
             saveTransaction();
         } catch (saveError) {
-            consola.error(`Failed to save inventory for player ${playerId}:`, saveError);
+            log.error(`Failed to save inventory for player ${playerId}:`, saveError);
             throw saveError;
         }
     }
@@ -149,9 +151,9 @@ export default class SqliteInventoryAdapter {
 
         try {
             this.databaseInstance.close();
-            consola.success("SQLite inventory database closed.");
+            log.success("SQLite inventory database closed.");
         } catch (closeError) {
-            consola.error("Error while closing SQLite inventory database:", closeError);
+            log.error("Error while closing SQLite inventory database:", closeError);
         }
     }
 
@@ -205,7 +207,7 @@ export default class SqliteInventoryAdapter {
         try {
             return JSON.parse(serializedNbtPayload);
         } catch {
-            consola.warn("Failed to parse item NBT JSON payload.");
+            log.warn("Failed to parse item NBT JSON payload.");
             return null;
         }
     }
@@ -214,7 +216,7 @@ export default class SqliteInventoryAdapter {
         if (SqliteInventoryAdapter.VALID_CATEGORIES.has(categoryValue)) {
             return categoryValue as ItemCategory;
         }
-        consola.warn(`Unknown item category encountered: ${categoryValue}. Falling back to valuables.`);
+        log.warn(`Unknown item category encountered: ${categoryValue}. Falling back to valuables.`);
         return ItemCategory.Valuables;
     }
 
@@ -222,7 +224,7 @@ export default class SqliteInventoryAdapter {
         if (SqliteInventoryAdapter.VALID_RARITIES.has(rarityValue)) {
             return rarityValue as ItemRarity;
         }
-        consola.warn(`Unknown item rarity encountered: ${rarityValue}. Falling back to common.`);
+        log.warn(`Unknown item rarity encountered: ${rarityValue}. Falling back to common.`);
         return ItemRarity.Common;
     }
 
@@ -231,7 +233,7 @@ export default class SqliteInventoryAdapter {
         if (SqliteInventoryAdapter.VALID_SLOTS.has(slotValue)) {
             return slotValue as EquipmentSlot;
         }
-        consola.warn(`Unknown equipment slot encountered: ${slotValue}.`);
+        log.warn(`Unknown equipment slot encountered: ${slotValue}.`);
         return null;
     }
 }

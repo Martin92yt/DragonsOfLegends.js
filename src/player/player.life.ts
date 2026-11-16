@@ -1,6 +1,8 @@
-import { consola } from "consola";
 import { InvalidDeathRespawnError, PlayerDeadError } from "../types/error.js";
 import type PlayerEntity from "./player.entity.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("life");
+
 
 /**
  * Why a player came back to life.
@@ -190,7 +192,7 @@ export default class PlayerLife {
         this.applyRevival();
         // Fire-and-forget by design: the state is already consistent in memory; persistence and the
         // `playerRevived` event must not turn a synchronous check into an async one. Failures are logged.
-        void this.announce("timer").catch((error: unknown) => consola.error(`Failed to announce the revival of ${this.player.id}.`, error));
+        void this.announce("timer").catch((error: unknown) => log.error(`Failed to announce the revival of ${this.player.id}.`, error));
     }
 
     private applyRevival(): void {
@@ -199,7 +201,7 @@ export default class PlayerLife {
         this.clearTimer();
         this.player.health.current = Math.max(1, Math.ceil(this.player.health.max * healthRatio));
         if (relocateToStartingCity) this.player.location = this.player.worldInstance.location.getStartingCityId();
-        consola.info(`✨ ${this.player.name} is back to life.`);
+        log.info(`✨ ${this.player.name} is back to life.`);
     }
 
     private async completeRevival(reason: RevivalReason): Promise<void> {

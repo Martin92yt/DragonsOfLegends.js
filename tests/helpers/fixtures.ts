@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, type TestContext } from "node:test";
-import { consola } from "consola";
+import { setLogMode } from "../../src/utils/logger.js";
 
 import EnemyEntity from "../../src/enemy/enemy.js";
 import { EnemyType } from "../../src/enemy/enemy.type.js";
@@ -30,7 +30,7 @@ import type { GameEvents } from "../../src/events/game-events.js";
 export type WorldOptions = NonNullable<ConstructorParameters<typeof World>[0]>;
 
 /** Silences library logging; spies installed with `t.mock.method` still observe every call. */
-consola.level = -999;
+setLogMode("silent");
 
 export let workspace = "";
 let previousWorkingDirectory = "";

@@ -1,9 +1,11 @@
-import { consola } from "consola";
 import { InvalidDeathLossRateError } from "../types/error.js";
 import { parseDuration } from "../utils/duration.js";
 import type { InventoryItemRecord } from "../inventory/inventory.interface.js";
 import { ItemRarity } from "../inventory/item.enum.js";
 import type PlayerEntity from "./player.entity.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("death");
+
 
 /**
  * Death item-loss configuration (`deathItemLoss` world option).
@@ -198,7 +200,7 @@ async function commitDeathItemLoss(
 
   // Single save of the whole inventory (empty stacks removed) instead of N remove() calls.
   await player.inventory.save(records.filter((record) => record.quantity > 0));
-  consola.info(`🎒 ${player.name} lost ${planned.length} item stack(s) on death.`);
+  log.info(`🎒 ${player.name} lost ${planned.length} item stack(s) on death.`);
 }
 
 /**
@@ -237,7 +239,7 @@ export async function handlePlayerDeath(
   const deathMode = worldOptions.deathMode ?? "cooldown";
   const { events, combat, players } = player.worldInstance;
 
-  consola.warn(`💀 Player ${player.name} has died! Death Mode: ${deathMode}`);
+  log.warn(`💀 Player ${player.name} has died! Death Mode: ${deathMode}`);
 
   if (deathMode !== "hardcore" && deathMode !== "cooldown" && deathMode !== "loose") {
     // Unknown mode: immediate revival, no event (there is no consequence to cancel).
@@ -271,7 +273,7 @@ export async function handlePlayerDeath(
     const requested = Number.isFinite(event.survivalHealth) ? Math.floor(event.survivalHealth) : 1;
     const survivalHealth = Math.min(player.health.max, Math.max(1, requested));
     player.health.current = survivalHealth;
-    consola.info(
+    log.info(
       `🛡️ Death of ${player.name} cancelled${event.cancelReason ? ` (${event.cancelReason})` : ""}: survives with ${survivalHealth} health.`,
     );
     return {
@@ -288,7 +290,7 @@ export async function handlePlayerDeath(
     case "hardcore": {
       // The in-memory instance stays locked forever: any action attempted through a stale reference is refused.
       player.life.killPermanently();
-      consola.error(
+      log.error(
         `🔥 Hardcore death: ${player.name} has lost everything permanently.`,
       );
       // Pas de save() après delete() : il recréerait le joueur supprimé en base.
@@ -299,7 +301,7 @@ export async function handlePlayerDeath(
     case "cooldown": {
       // From now on, every player action is refused until `respawnAt` (see PlayerLife.assertCanAct).
       const respawnAt = player.life.die(Math.max(0, (plannedRespawnAt ?? Date.now()) - Date.now()));
-      consola.info(
+      log.info(
         `⏳ ${player.name} is dead and resting. Cooldown: ${cooldownTime}`,
       );
       // Persisted right away so the lock survives a restart or an eviction from the cache.
@@ -314,7 +316,7 @@ export async function handlePlayerDeath(
 
       await commitDeathItemLoss(player, plannedItemLoss);
 
-      consola.info(
+      log.info(
         `💸 Loose death: ${player.name} lost ${lostGold} gold (${penaltyRate}% penalty) and ${plannedItemLoss.length} item stack(s).`,
       );
       await players.save(player);

@@ -1,4 +1,3 @@
-import { consola } from "consola";
 import { parsePlayerEffectsState } from "../effects/effect.serialization.js";
 import type {
     ActiveEffectState,
@@ -11,6 +10,9 @@ import type {
 } from "../effects/effect.types.js";
 import { InvalidDurationError } from "../types/error.js";
 import type PlayerEntity from "./player.entity.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("effects");
+
 
 /** Neutral modifiers of a player without active effect. */
 export const NO_EFFECT_MODIFIERS: ResolvedEffectModifiers = { xpMultiplier: 1, luckPercent: 0, critRateBonus: 0 };
@@ -285,7 +287,7 @@ export default class PlayerEffects {
         try {
             await hook(context);
         } catch (error) {
-            consola.error(`A hook of the effect "${definition.id}" failed for player ${this.player.id}.`, error);
+            log.error(`A hook of the effect "${definition.id}" failed for player ${this.player.id}.`, error);
         }
     }
 
@@ -305,7 +307,7 @@ export default class PlayerEffects {
         const delay = Math.min(Math.max(1, next - Date.now()), MAX_TIMER_DELAY_MS);
         this.timer = setTimeout(() => {
             this.timer = undefined;
-            void this.sync().catch((error: unknown) => consola.error(`Failed to process the effects of ${this.player.id}.`, error));
+            void this.sync().catch((error: unknown) => log.error(`Failed to process the effects of ${this.player.id}.`, error));
         }, delay);
         // Rationale: a pending effect must never keep the Node.js process alive.
         this.timer.unref();

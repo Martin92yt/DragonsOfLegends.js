@@ -1,9 +1,11 @@
 import PlayerEntity from "../player/player.entity.js";
 import EnemyEntity from "../enemy/enemy.js";
-import { consola } from "consola";
 import { CombatResult } from "../types/result.js";
 import { ItemCategory } from "../inventory/item.enum.js";
 import { ItemNBT, InventoryItemRecord } from "../inventory/inventory.interface.js";
+import { createLogger } from "../utils/logger.js";
+const log = createLogger("combat");
+
 
 interface ItemDamageBonuses {
     flatBonus: number;
@@ -68,7 +70,7 @@ export default class Combat {
         // Amulets and potions boost the experience (the event below reports the experience actually gained).
         const { gainedAmount: experience } = await this.playerEntity.gainXP(this.enemyEntity.experience);
         this.playerEntity.gold += this.enemyEntity.gold;
-        consola.success(`${this.playerEntity.name} defeated ${this.enemyEntity.name}.`);
+        log.success(`${this.playerEntity.name} defeated ${this.enemyEntity.name}.`);
         await this.collectLoot();
 
         // Listeners (bestiary, achievements...) are awaited so their effects are visible when the result is returned.
@@ -105,7 +107,7 @@ export default class Combat {
             try {
                 await this.playerEntity.inventory.add(drop.loot, drop.quantity);
             } catch (error) {
-                consola.error(`Failed to give ${drop.quantity}x ${drop.loot.itemId} to ${this.playerEntity.name}.`, error);
+                log.error(`Failed to give ${drop.quantity}x ${drop.loot.itemId} to ${this.playerEntity.name}.`, error);
             }
         }
     }
@@ -122,7 +124,7 @@ export default class Combat {
         const isPlayerDefeated = !this.playerEntity.isAlive();
 
         if (isPlayerDefeated) {
-            consola.success(`${this.playerEntity.name} was defeated by ${this.enemyEntity.name}.`);
+            log.success(`${this.playerEntity.name} was defeated by ${this.enemyEntity.name}.`);
         }
 
         return {
@@ -213,7 +215,7 @@ export default class Combat {
     private getPlayerAttackStat(): number {
         const classDefinition = this.playerEntity.worldInstance.classes.get(this.playerEntity.classId);
         if (!classDefinition) {
-            consola.warn(`Unknown player class identifier '${this.playerEntity.classId}'; defaulting attack stat to strength.`);
+            log.warn(`Unknown player class identifier '${this.playerEntity.classId}'; defaulting attack stat to strength.`);
             return this.playerEntity.attributes.strength;
         }
 
@@ -251,7 +253,7 @@ export default class Combat {
 
         if (!itemDataNBT || itemDataNBT.durability === undefined || itemDataNBT.durability <= 0) {
             if (itemDataNBT && itemDataNBT.durability !== undefined && itemDataNBT.durability < 0) {
-                consola.warn(`Item ${inventoryItemRecord.name} has invalid negative durability (${itemDataNBT.durability}).`);
+                log.warn(`Item ${inventoryItemRecord.name} has invalid negative durability (${itemDataNBT.durability}).`);
             }
             return;
         }
@@ -263,7 +265,7 @@ export default class Combat {
         itemDataNBT.durability = Math.max(0, itemDataNBT.durability - calculatedDurabilityLoss);
 
         if (itemDataNBT.durability === 0) {
-            consola.success(`Equipment broken: ${inventoryItemRecord.name}.`);
+            log.success(`Equipment broken: ${inventoryItemRecord.name}.`);
         }
     }
 
