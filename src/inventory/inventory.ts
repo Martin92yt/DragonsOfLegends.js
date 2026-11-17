@@ -1,3 +1,5 @@
+import { findUnmetRequirements, readEquipRequirements, type UnmetRequirement } from "./equip-requirements.js";
+import { EquipRequirementError } from "../types/error.js";
 import InventoryDatabase from "./inventory.database.js";
 import { ItemNBT, InventoryItemRecord, EquipmentRecord } from "./inventory.interface.js";
 import { EquipmentSlot, ItemCategory, ItemRarity } from "./item.enum.js";
@@ -243,7 +245,8 @@ export class InventoryEntity {
      *
      * @param equipmentSlot The equipment slot.
      * @param itemId The item identifier.
-     * @returns True if the item was successfully equipped, false otherwise.
+     * @returns True if the item was successfully equipped, false otherwise (item missing or wrong slot).
+     * @throws {EquipRequirementError} If the player does not meet the stat requirements of the item.
      */
     public async equip(equipmentSlot: EquipmentSlot, itemId: string): Promise<boolean> {
         this.playerEntityReference.assertCanAct("inventory.equip");
@@ -261,6 +264,12 @@ export class InventoryEntity {
             if (!permittedCategories.includes(targetInventoryItem.category)) {
                 log.warn(`Failed to equip ${itemId} to ${equipmentSlot}: category ${targetInventoryItem.category} is not permitted.`);
                 return undefined;
+            }
+
+            const unmet = findUnmetRequirements(readEquipRequirements(targetInventoryItem), this.playerEntityReference);
+            if (unmet.length > 0) {
+                log.warn(`Failed to equip ${itemId} for ${this.getOwnerName()}: requirements not met.`);
+                throw new EquipRequirementError(itemId, unmet);
             }
 
             const replacedItemId = inventoryItems.find(itemRecord => itemRecord.isEquipped && itemRecord.equipmentSlot === equipmentSlot)?.itemId;
@@ -295,6 +304,17 @@ export class InventoryEntity {
         }
         await events.emitAsync("itemEquip", { playerId: this.playerIdIdentifier, player: this.playerEntityReference, itemId, slot: equipmentSlot });
         return true;
+    }
+
+    /**
+     * Tells which stat requirements of an item the player does not meet, without equipping anything.
+     *
+     * @param itemId The item identifier (an unequipped item of the inventory).
+     * @returns The unmet requirements (empty when the player may wear it), or `undefined` if the item is not in the inventory.
+     */
+    public async getUnmetRequirements(itemId: string): Promise<UnmetRequirement[] | undefined> {
+        const record = (await this.load()).find(itemRecord => itemRecord.itemId === itemId && !itemRecord.isEquipped);
+        return record ? findUnmetRequirements(readEquipRequirements(record), this.playerEntityReference) : undefined;
     }
 
     /**

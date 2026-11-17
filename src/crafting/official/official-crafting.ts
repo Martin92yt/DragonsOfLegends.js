@@ -14,8 +14,8 @@ const ironIngot = item("iron_ingot", "Iron Ingot", ItemCategory.Materials, ItemR
 const steelIngot = item("steel_ingot", "Steel Ingot", ItemCategory.Materials, ItemRarity.Rare, 64, "Iron hardened with coal.");
 
 const copperSword: Item = { itemId: "copper_sword", name: "Copper Sword", category: ItemCategory.Weapons, rarity: ItemRarity.Common, maxStack: 1, description: "A soft but serviceable blade.", defaultNbt: { damageBonus: 4, durability: 80 } };
-const ironSword: Item = { itemId: "iron_sword", name: "Iron Sword", category: ItemCategory.Weapons, rarity: ItemRarity.Uncommon, maxStack: 1, description: "A reliable iron blade.", defaultNbt: { damageBonus: 6, durability: 100 } };
-const steelSword: Item = { itemId: "steel_sword", name: "Steel Sword", category: ItemCategory.Weapons, rarity: ItemRarity.Rare, maxStack: 1, description: "A well-balanced steel blade.", defaultNbt: { damageBonus: 12, durability: 150 } };
+const ironSword: Item = { itemId: "iron_sword", name: "Iron Sword", category: ItemCategory.Weapons, rarity: ItemRarity.Uncommon, maxStack: 1, description: "A reliable iron blade.", defaultNbt: { damageBonus: 6, durability: 100, requirements: { intelligence: 10 } } };
+const steelSword: Item = { itemId: "steel_sword", name: "Steel Sword", category: ItemCategory.Weapons, rarity: ItemRarity.Rare, maxStack: 1, description: "A well-balanced steel blade.", defaultNbt: { damageBonus: 12, durability: 150, requirements: { intelligence: 15 } } };
 const ironHelmet: Item = { itemId: "iron_helmet", name: "Iron Helmet", category: ItemCategory.Armor, rarity: ItemRarity.Uncommon, maxStack: 1, description: "Protects the head.", defaultNbt: { defenseBonus: 3, durability: 100 } };
 const ironChestplate: Item = { itemId: "iron_chestplate", name: "Iron Chestplate", category: ItemCategory.Armor, rarity: ItemRarity.Uncommon, maxStack: 1, description: "Heavy but sturdy.", defaultNbt: { defenseBonus: 6, durability: 120 } };
 

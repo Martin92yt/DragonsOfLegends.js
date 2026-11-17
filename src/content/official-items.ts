@@ -55,7 +55,7 @@ export const OFFICIAL_ITEMS: readonly Item[] = [
         rarity: ItemRarity.Uncommon,
         maxStack: 1,
         description: "A reliable iron blade.",
-        defaultNbt: { damageBonus: 6, durability: 100 }
+        defaultNbt: { damageBonus: 6, durability: 100, requirements: { intelligence: 10 } }
     },
     {
         itemId: "steel_sword",
@@ -64,7 +64,7 @@ export const OFFICIAL_ITEMS: readonly Item[] = [
         rarity: ItemRarity.Rare,
         maxStack: 1,
         description: "A well-balanced steel blade.",
-        defaultNbt: { damageBonus: 12, durability: 150 }
+        defaultNbt: { damageBonus: 12, durability: 150, requirements: { intelligence: 15 } }
     },
     // Potions.
     {

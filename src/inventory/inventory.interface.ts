@@ -1,3 +1,4 @@
+import type { EquipRequirements } from "./equip-requirements.js";
 import { EquipmentSlot, ItemCategory, ItemRarity } from "./item.enum.js";
 
 /**
@@ -10,6 +11,8 @@ export interface ItemNBT {
     defenseBonus?: number;
     criticalHitRateBonus?: number;
     durability?: number;
+    /** Stats needed to wear the item, see `EquipRequirements` (e.g. `{ intelligence: 10 }`). */
+    requirements?: EquipRequirements;
     [key: string]: unknown;
 }
 

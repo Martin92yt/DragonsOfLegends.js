@@ -261,6 +261,16 @@ Opt-in with `officialPack: true`, `premadeCrafting: true` or `world.loadOfficial
 - **Farming** (`world.farming`): `plant(player, "wheat", plot)` then, once grown, `harvest(player, plot)`. Growth is shortened by the farmer level, and plots are unlocked as the farmer levels up. Harvests give consumables (healing) and ingredients.
 - **Enchanting** (`world.enchanting`): `enchant(player, { itemId, slot }, "lifesteal")`. Costs items, gold and/or experience and needs the enchanter level. Official enchantments: **Lifesteal** (heals 3% of the enemy's health per blow, per level) and **Mending** (experience gained repairs the worn item). Add your own with `hooks: { onAttack, onExperienceGain }`.
 
+### Equip requirements
+
+An item can require stats to be worn: `requirements` in its item data takes `level`, `strength`, `agility`, `intelligence` and/or `defense`.
+
+```ts
+{ itemId: "iron_sword", /* ... */ defaultNbt: { damageBonus: 6, durability: 100, requirements: { intelligence: 10 } } }
+```
+
+`inventory.equip(slot, itemId)` throws an `EquipRequirementError` (with the `unmet` list: stat, required, actual) when the player is too weak; `inventory.getUnmetRequirements(itemId)` checks without equipping. The official iron sword needs 10 intelligence and the steel sword 15. Crafted items keep their requirements.
+
 ### Balance and formulas
 
 Every combat and progression formula lives in `src/balance/formulas.ts` as a pure function, tuned by the `balance` world option (a partial object merged with `DEFAULT_BALANCE` and validated):

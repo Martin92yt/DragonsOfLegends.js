@@ -231,3 +231,6 @@ export { createLogger, getLogMode, setLogMode, isLogMode, LOG_MODES, type LogMod
 // Balance
 export { DEFAULT_BALANCE, resolveBalance, type BalanceConfig, type BalanceOptions } from "./balance/balance.js";
 export * as formulas from "./balance/formulas.js";
+
+// Equip requirements
+export { EQUIP_REQUIREMENTS_NBT_KEY, findUnmetRequirements, readEquipRequirements, type EquipRequirements, type RequirementStat, type UnmetRequirement } from "./inventory/equip-requirements.js";

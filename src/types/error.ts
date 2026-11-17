@@ -1021,3 +1021,17 @@ export class CropNotReadyError extends FarmingError {
         this.name = "CropNotReadyError";
     }
 }
+
+export class EquipRequirementError extends Error {
+    /**
+     * Creates an error indicating that a player does not meet the stat requirements of an item.
+     *
+     * @param itemId The item identifier.
+     * @param unmet The requirements that are not met.
+     * @returns void
+     */
+    public constructor(public readonly itemId: string, public readonly unmet: ReadonlyArray<{ stat: string; required: number; actual: number }>) {
+        super(`Cannot equip "${itemId}": requires ${unmet.map((entry) => `${entry.stat} ${entry.required} (you have ${entry.actual})`).join(", ")}.`);
+        this.name = "EquipRequirementError";
+    }
+}
