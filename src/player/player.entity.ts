@@ -16,6 +16,7 @@ import PlayerLife from "./player.life.js";
 import PlayerEffects from "./player.effects.js";
 import { readAmuletModifiers } from "../inventory/amulet.js";
 import PlayerFarm from "../farming/player.farm.js";
+import { PHYSICAL, defenseFactor, dodgeRate, experienceRequired, healthGainForLevel, intelligenceResistance, resistanceFactor } from "../balance/formulas.js";
 import { ItemCategory } from "../inventory/item.enum.js";
 import { resolveClassPassives, type ResolvedClassPassives } from "./class-passives.js";
 import { resolvePlayerModifiers, scaleExperience, type PlayerModifiers } from "./player.modifiers.js";
@@ -28,11 +29,21 @@ const log = createLogger("player");
 
 export type Attribute = "strength" | "agility" | "intelligence" | "defense";
 
+/**
+ * How a blow meets the player.
+ */
+export interface TakeDamageOptions {
+    /** Type of the damage. @defaultValue "physical" */
+    readonly damageType?: string;
+    /** `true` when the blow can be dodged (attacks of enemies). @defaultValue false */
+    readonly dodgeable?: boolean;
+}
+
+const DEFAULT_STAT_GROWTH: Readonly<Partial<Record<keyof ClassStats, number>>> = {};
+
 export default class PlayerEntity {
     // Rationale: Rebalanced base values and scaling to prevent excessive health pools and smooth out early-to-mid game progression spikes.
     private static readonly BASE_HEALTH = 85;
-    private static readonly HP_PER_LEVEL = 9;
-    private static readonly XP_PER_LEVEL = 110;
     private static readonly BASE_TRAVEL_TIME_MS = 1000;
     private static readonly TRAVEL_DISTANCE_MULTIPLIER = 900;
     private static readonly BASE_AMBUSH_CHANCE = 0.10;
@@ -144,7 +155,7 @@ export default class PlayerEntity {
 
         this.experience = {
             current: Math.max(0, experience),
-            required: this.level * PlayerEntity.XP_PER_LEVEL
+            required: experienceRequired(this.worldInstance.balance, this.level)
         };
 
         this.health = {
@@ -331,19 +342,30 @@ export default class PlayerEntity {
      * Applies damage to the player after calculating equipment and attribute defenses.
      *
      * @param damage The raw incoming damage amount.
+     * @param options The type of the damage and whether it can be dodged.
      * @returns The damage result, or null if no damage can be applied.
      */
-    public async takeDamage(damage: number): Promise<(DamageResult & { death?: DeathResult }) | null> {
+    public async takeDamage(damage: number, options: TakeDamageOptions = {}): Promise<(DamageResult & { death?: DeathResult }) | null> {
         if (damage <= 0 || !this.isAlive()) {
             return null;
         }
 
+        const balance = this.worldInstance.balance;
+        const damageType = options.damageType ?? PHYSICAL;
         const passives = this.getClassPassives();
         const computed = this.computeEquipmentDefense(await this.inventory.getItems());
+
+        // Dodge: a successful dodge avoids the blow entirely (no damage, no armor wear).
+        if (options.dodgeable && Math.random() < dodgeRate(balance, this.attributes.agility, computed.dodgeBonus)) {
+            return { reducedDamage: 0, currentHealth: this.health.current, rawDamage: damage, dodged: true };
+        }
+
         const flatDefense = computed.flatDefense;
         const percentDefense = computed.percentDefense + passives.defensePercent / 100;
         const totalDefense = Math.max(0, Math.floor((this.attributes.defense + flatDefense) * (1 + percentDefense)));
-        const mitigationFactor = 100 / (100 + totalDefense * 2.5);
+        // Physical damage meets the defense; other types meet the resistance (intelligence + worn gear) of their type.
+        const typeResistance = (computed.resistances[damageType] ?? 0) + (damageType === PHYSICAL ? 0 : intelligenceResistance(balance, this.attributes.intelligence));
+        const mitigationFactor = (damageType === PHYSICAL ? defenseFactor(balance, totalDefense, balance.defense.playerConstant) : 1) * resistanceFactor(balance, typeResistance);
         const reducedDamage = Math.max(1, Math.floor(damage * mitigationFactor));
 
         // Cancellable: nothing has been applied yet (neither health nor armor wear), so a cancellation leaves the player untouched.
@@ -519,7 +541,7 @@ export default class PlayerEntity {
      * @returns void
      */
     public async updateMaxHealth(): Promise<void> {
-        const baseMaxHealth = PlayerEntity.BASE_HEALTH + this.level * PlayerEntity.HP_PER_LEVEL;
+        const baseMaxHealth = PlayerEntity.BASE_HEALTH + this.healthFromLevels(this.level);
         
         // Ajout du 'await' ici pour récupérer les items de l'inventaire
         const items = await this.inventory.getItems();
@@ -570,9 +592,11 @@ export default class PlayerEntity {
     /**
      * Sums the defense of the equipped items (a broken piece, durability 0, protects no more). Changes nothing.
      */
-    private computeEquipmentDefense(items: InventoryItemRecord[]): { flatDefense: number; percentDefense: number } {
+    private computeEquipmentDefense(items: InventoryItemRecord[]): { flatDefense: number; percentDefense: number; dodgeBonus: number; resistances: Record<string, number> } {
         let flatDefense = 0;
         let percentDefense = 0;
+        let dodgeBonus = 0;
+        const resistances: Record<string, number> = {};
 
         for (const item of items) {
             // Rationale: the item data lives in `itemNbtData`.
@@ -594,9 +618,17 @@ export default class PlayerEntity {
             if (typeof armorBonusPercent === "number") {
                 percentDefense += armorBonusPercent / 100;
             }
+
+            if (typeof data["dodgeBonus"] === "number") dodgeBonus += data["dodgeBonus"];
+            const itemResistances = data["resistances"];
+            if (typeof itemResistances === "object" && itemResistances !== null && !Array.isArray(itemResistances)) {
+                for (const [type, percent] of Object.entries(itemResistances)) {
+                    if (typeof percent === "number" && Number.isFinite(percent)) resistances[type] = (resistances[type] ?? 0) + percent;
+                }
+            }
         }
 
-        return { flatDefense, percentDefense };
+        return { flatDefense, percentDefense, dodgeBonus, resistances };
     }
 
     /**
@@ -708,19 +740,21 @@ export default class PlayerEntity {
     private levelUp(): void {
         this.level++;
         // Rationale: raise the maximum right away, then re-read the equipment bonuses; the player ends at the new maximum.
-        this.health.max += PlayerEntity.HP_PER_LEVEL;
+        this.health.max += healthGainForLevel(this.worldInstance.balance, this.level);
         this.health.current = this.health.max;
         void this.updateMaxHealth()
             .then(() => {
                 this.health.current = this.health.max;
             })
             .catch((error: unknown) => log.error(`Failed to refresh the maximum health of ${this.id}.`, error));
-        this.attributes.strength++;
-        this.attributes.agility++;
-        this.attributes.intelligence++;
-        this.attributes.defense++;
+        // Each class grows its own way (see PlayerClassDefinition.statGrowth); +1 in every stat without one.
+        const growth = this.worldInstance.classes.get(this.classId)?.statGrowth ?? DEFAULT_STAT_GROWTH;
+        this.attributes.strength += growth.strength ?? 1;
+        this.attributes.agility += growth.agility ?? 1;
+        this.attributes.intelligence += growth.intelligence ?? 1;
+        this.attributes.defense += growth.defense ?? 1;
         this.attributes.points++;
-        this.experience.required = this.level * PlayerEntity.XP_PER_LEVEL;
+        this.experience.required = experienceRequired(this.worldInstance.balance, this.level);
         log.success(`Player ${this.name} reached level ${this.level}.`);
         this.worldInstance.events.emit("playerLevelUp", {
             playerId: this.id,
@@ -737,6 +771,12 @@ export default class PlayerEntity {
      * @returns Generated class statistics.
      * @throws UnknownPlayerClassError If the player class is unknown.
      */
+    private healthFromLevels(level: number): number {
+        let total = 0;
+        for (let reached = 1; reached <= level; reached++) total += healthGainForLevel(this.worldInstance.balance, reached);
+        return total;
+    }
+
     private generateBaseStats(): ClassStats {
         // Throws UnknownPlayerClassError when the class is not registered in the world.
         const { baseStats } = this.worldInstance.classes.require(this.classId);

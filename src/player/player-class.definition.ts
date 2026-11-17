@@ -23,6 +23,8 @@ export interface PlayerClassDefinition {
      * @defaultValue "strength"
      */
     readonly attackStat?: AttackStat;
+    /** Attribute points gained per level (+1 in each attribute when omitted); the classes grow in different ways. */
+    readonly statGrowth?: Readonly<Partial<ClassStats>>;
     /** Passive bonuses of the class: combat, defense, experience, trades and equipment affinities. */
     readonly passives?: ClassPassives;
 }

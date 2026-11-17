@@ -3,6 +3,7 @@ import EnemyEntity from "../enemy/enemy.js";
 import { CombatResult } from "../types/result.js";
 import { ItemCategory } from "../inventory/item.enum.js";
 import { ItemNBT, InventoryItemRecord } from "../inventory/inventory.interface.js";
+import { PHYSICAL, criticalMultiplier, criticalRate, variance } from "../balance/formulas.js";
 import { createLogger } from "../utils/logger.js";
 const log = createLogger("combat");
 
@@ -11,13 +12,24 @@ interface ItemDamageBonuses {
     flatBonus: number;
     percentageBonus: number;
     critRateBonus: number;
+    /** Added to the critical multiplier (`critDamageBonus`). */
+    critDamageBonus: number;
+    /** Armor penetration in percent (`armorPenetration`). */
+    armorPenetration: number;
+    /** Damage type of the weapon (`damageType`), when it sets one. */
+    damageType?: string;
     contributesToAttack: boolean;
 }
 
+/** A blow of the player, ready to be applied to the enemy. */
+interface PlayerBlow {
+    damage: number;
+    damageType: string;
+    armorPenetration: number;
+    critical: boolean;
+}
+
 export default class Combat {
-    private static readonly BASE_CRIT_RATE = 0.10;
-    private static readonly MAX_CRIT_RATE = 0.75;
-    private static readonly CRIT_MULTIPLIER = 1.45;
 
     private static readonly RARITY_DURABILITY_MULTIPLIERS: Readonly<Record<string, number>> = {
         common: 1.4,
@@ -56,8 +68,12 @@ export default class Combat {
     private async executePlayerTurn(): Promise<number> {
         // Rationale: the loot of an enemy is rolled when it dies, so the luck of the killer must be known before the blow.
         this.enemyEntity.dropLuckPercent = (await this.playerEntity.getModifiers()).luckPercent;
-        const rawPlayerDamageOutput = await this.getPlayerDamage();
-        const inflicted = this.enemyEntity.takeDamage(rawPlayerDamageOutput);
+        const blow = await this.getPlayerDamage();
+        const inflicted = this.enemyEntity.takeDamage(blow.damage, {
+            damageType: blow.damageType,
+            armorPenetration: blow.armorPenetration,
+            balance: this.playerEntity.worldInstance.balance
+        });
         // Enchantments of the worn equipment (e.g. Lifesteal) react to the blow before the enemy answers.
         await this.playerEntity.worldInstance.enchanting.runAttackHooks(this.playerEntity, this.enemyEntity, inflicted);
         return inflicted;
@@ -116,10 +132,15 @@ export default class Combat {
      * Executes the enemy's counter-attack action.
      */
     private async executeEnemyTurn(inflictedEnemyDamage: number): Promise<CombatResult> {
-        const rawEnemyAttackDamage = Math.max(1, this.enemyEntity.strength);
-        
-        // 🛡️ Ajout du 'await' indispensable ici
-        const playerDamageReductionResult = await this.playerEntity.takeDamage(rawEnemyAttackDamage);
+        const balance = this.playerEntity.worldInstance.balance;
+        // An enemy attack varies a little and can be critical; the player may dodge it (see PlayerEntity.takeDamage).
+        const enemyCritical = Math.random() < balance.enemyAttack.criticalRate;
+        const rawEnemyAttackDamage = Math.max(
+            1,
+            Math.floor(this.enemyEntity.strength * variance(balance.enemyAttack.varianceMin, balance.enemyAttack.varianceMax) * (enemyCritical ? balance.enemyAttack.criticalMultiplier : 1))
+        );
+
+        const playerDamageReductionResult = await this.playerEntity.takeDamage(rawEnemyAttackDamage, { damageType: this.enemyEntity.damageType, dodgeable: true });
         const finalPlayerDamageTaken = playerDamageReductionResult?.reducedDamage ?? rawEnemyAttackDamage;
         const isPlayerDefeated = !this.playerEntity.isAlive();
 
@@ -140,34 +161,38 @@ export default class Combat {
     /**
      * Calculates the damage dealt by the player.
      */
-    private async getPlayerDamage(): Promise<number> {
+    private async getPlayerDamage(): Promise<PlayerBlow> {
+        const balance = this.playerEntity.worldInstance.balance;
         const basePlayerAttackStat = this.getPlayerAttackStat();
-        const randomDamageRoll = Math.floor(Math.random() * 5) - 2;
-        let totalCalculatedDamage = basePlayerAttackStat + randomDamageRoll;
 
         const equippedInventoryItems = await this.playerEntity.inventory?.getItems() ?? [];
-        const accumulatedItemBonuses = this.aggregateItemBonuses(equippedInventoryItems);
-
+        const bonuses = this.aggregateItemBonuses(equippedInventoryItems);
         const passives = this.playerEntity.getClassPassives();
-        totalCalculatedDamage += accumulatedItemBonuses.flatBonus;
-        totalCalculatedDamage *= 1 + accumulatedItemBonuses.percentageBonus;
-        totalCalculatedDamage *= 1 + passives.damagePercent / 100;
+
+        // (attack stat + flat bonuses) x (1 + item %) x (1 + class %) x random variance.
+        let damage = (basePlayerAttackStat + bonuses.flatBonus) * (1 + bonuses.percentageBonus) * (1 + passives.damagePercent / 100);
+        damage *= variance(balance.damage.varianceMin, balance.damage.varianceMax);
 
         if (equippedInventoryItems.length > 0) {
             await this.playerEntity.inventory?.save(equippedInventoryItems);
         }
 
-        const totalCriticalRate = Math.min(
-            Combat.MAX_CRIT_RATE,
-            // Rationale: worn amulets are already counted in the item bonuses; only the temporary effects are added here.
-            Combat.BASE_CRIT_RATE + accumulatedItemBonuses.critRateBonus + passives.critRateBonus + this.playerEntity.effects.getModifiers().critRateBonus
+        // Rationale: worn amulets are already counted in the item bonuses; only the temporary effects are added here.
+        const critical = Math.random() < criticalRate(
+            balance,
+            this.playerEntity.attributes.agility,
+            bonuses.critRateBonus + passives.critRateBonus + this.playerEntity.effects.getModifiers().critRateBonus
         );
-
-        if (Math.random() < totalCriticalRate) {
-            totalCalculatedDamage *= Combat.CRIT_MULTIPLIER + passives.critMultiplierBonus;
+        if (critical) {
+            damage *= criticalMultiplier(balance, passives.critMultiplierBonus + bonuses.critDamageBonus);
         }
 
-        return Math.max(1, Math.floor(totalCalculatedDamage));
+        return {
+            damage: Math.max(1, Math.floor(damage)),
+            damageType: bonuses.damageType ?? PHYSICAL,
+            armorPenetration: bonuses.armorPenetration,
+            critical
+        };
     }
 
     /**
@@ -177,6 +202,9 @@ export default class Combat {
         let totalFlatBonus = 0;
         let totalPercentageBonus = 0;
         let totalCritRateBonus = 0;
+        let totalCritDamageBonus = 0;
+        let totalPenetration = 0;
+        let damageType: string | undefined;
 
         for (const inventoryItemRecord of inventoryItemRecords) {
             if (!inventoryItemRecord.isEquipped || !inventoryItemRecord.itemNbtData) {
@@ -195,6 +223,10 @@ export default class Combat {
             totalFlatBonus += currentItemBonuses.flatBonus * affinity;
             totalPercentageBonus += currentItemBonuses.percentageBonus * affinity;
             totalCritRateBonus += currentItemBonuses.critRateBonus * affinity;
+            totalCritDamageBonus += currentItemBonuses.critDamageBonus;
+            totalPenetration += currentItemBonuses.armorPenetration;
+            // The first worn weapon that sets a damage type decides the type of the blow.
+            if (damageType === undefined && inventoryItemRecord.category === ItemCategory.Weapons) damageType = currentItemBonuses.damageType;
 
             if (currentItemBonuses.contributesToAttack) {
                 this.applyItemDurability(inventoryItemRecord);
@@ -204,8 +236,11 @@ export default class Combat {
         return { 
             flatBonus: totalFlatBonus, 
             percentageBonus: totalPercentageBonus, 
-            critRateBonus: totalCritRateBonus, 
-            contributesToAttack: false 
+            critRateBonus: totalCritRateBonus,
+            critDamageBonus: totalCritDamageBonus,
+            armorPenetration: totalPenetration,
+            ...(damageType !== undefined ? { damageType } : {}),
+            contributesToAttack: false
         };
     }
 
@@ -235,12 +270,19 @@ export default class Combat {
         const flatBonus = typeof flatDamageBonus === "number" ? flatDamageBonus : 0;
         const percentageBonus = typeof percentageDamageBonus === "number" ? percentageDamageBonus / 100 : 0;
         const critRateBonus = typeof criticalRateBonusValue === "number" ? criticalRateBonusValue : 0;
-        const contributesToAttack = flatBonus !== 0 || percentageBonus !== 0 || critRateBonus !== 0;
+        const readNumber = (key: string): number => (typeof itemDataNBT[key] === "number" ? (itemDataNBT[key] as number) : 0);
+        const critDamageBonus = readNumber("critDamageBonus");
+        const armorPenetration = readNumber("armorPenetration");
+        const weaponDamageType = typeof itemDataNBT["damageType"] === "string" ? (itemDataNBT["damageType"] as string) : undefined;
+        const contributesToAttack = flatBonus !== 0 || percentageBonus !== 0 || critRateBonus !== 0 || critDamageBonus !== 0 || armorPenetration !== 0;
 
         return {
             flatBonus,
             percentageBonus,
             critRateBonus,
+            critDamageBonus,
+            armorPenetration,
+            ...(weaponDamageType !== undefined ? { damageType: weaponDamageType } : {}),
             contributesToAttack
         };
     }

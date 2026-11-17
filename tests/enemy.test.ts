@@ -15,11 +15,11 @@ import { createWorld, makeEnemy, NEUTRAL_RANDOM, spawn, stubRandom, useIsolatedW
 useIsolatedWorkspace();
 
 describe("EnemyEntity", () => {
-    it("mitigates damage with 40% of its defense and inflicts at least 1", () => {
+    it("mitigates damage with a diminishing defense curve and inflicts at least 1", () => {
         const enemy = makeEnemy({ health: 50, defense: 10 });
-        // Rationale: floor(10 * 0.4) = 4 points of mitigation.
-        assert.equal(enemy.takeDamage(10), 6);
-        assert.equal(enemy.health, 44);
+        // Rationale: factor = 100 / (100 + 10 * 2) = 0.833 -> floor(10 * 0.833) = 8.
+        assert.equal(enemy.takeDamage(10), 8);
+        assert.equal(enemy.health, 42);
         assert.equal(enemy.takeDamage(1), 1);
     });
 
@@ -116,8 +116,8 @@ describe("EnemyManager", () => {
         const manager = new EnemyManager();
         const base = manager.createOfType(EnemyType.Goblin, 1);
         const scaled = manager.createOfType(EnemyType.Goblin, 11);
-        // Rationale: multiplier = 1 + (level - 1) * 0.09 = 1.9 at level 11.
-        assert.ok(Math.abs(scaled.health / base.health - 1.9) < 0.05);
+        // Rationale: multiplier = 1 + 0.09 * 10 + 0.003 * 10 ** 2 = 2.2 at level 11.
+        assert.ok(Math.abs(scaled.health / base.health - 2.2) < 0.06);
         assert.ok(scaled.strength > base.strength && scaled.experience > base.experience && scaled.gold > base.gold);
     });
 

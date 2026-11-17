@@ -149,17 +149,18 @@ describe("Combat resolution", () => {
         world.combat.startWithEnemy(player, makeEnemy({ health: 1000 }));
         stubRandom(t, 0);
         const result = await world.combat.attack(player.id);
-        // Rationale: (10 - 2 roll) * 1.45 critical multiplier = 11.6 -> 11.
-        assert.equal(result.enemyDamage, 11);
+        // Rationale: 10 * 0.92 (minimum variance) * 1.45 critical multiplier = 13.34 -> 13.
+        assert.equal(result.enemyDamage, 13);
     });
 
-    it("subtracts 40% of the enemy defense from the damage", async (t) => {
+    it("reduces the damage with the enemy defense (diminishing curve)", async (t) => {
         const world = createWorld();
         const player = await spawn(world);
         fixAttributes(player);
         world.combat.startWithEnemy(player, makeEnemy({ health: 1000, defense: 10 }));
         stubRandom(t, NEUTRAL_RANDOM);
-        assert.equal((await world.combat.attack(player.id)).enemyDamage, 10 - 4);
+        // factor = 100 / (100 + 10 * 2) = 0.833 -> floor(10 * 0.833) = 8.
+        assert.equal((await world.combat.attack(player.id)).enemyDamage, 8);
     });
 
     it("uses the explorer's agility as attack stat", async (t) => {

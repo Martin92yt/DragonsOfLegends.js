@@ -261,6 +261,31 @@ Opt-in with `officialPack: true`, `premadeCrafting: true` or `world.loadOfficial
 - **Farming** (`world.farming`): `plant(player, "wheat", plot)` then, once grown, `harvest(player, plot)`. Growth is shortened by the farmer level, and plots are unlocked as the farmer levels up. Harvests give consumables (healing) and ingredients.
 - **Enchanting** (`world.enchanting`): `enchant(player, { itemId, slot }, "lifesteal")`. Costs items, gold and/or experience and needs the enchanter level. Official enchantments: **Lifesteal** (heals 3% of the enemy's health per blow, per level) and **Mending** (experience gained repairs the worn item). Add your own with `hooks: { onAttack, onExperienceGain }`.
 
+### Balance and formulas
+
+Every combat and progression formula lives in `src/balance/formulas.ts` as a pure function, tuned by the `balance` world option (a partial object merged with `DEFAULT_BALANCE` and validated):
+
+```ts
+const world = new World({ balance: { critical: { maxRate: 0.5 }, progression: { xpExponent: 1.25 } } });
+```
+
+| Mechanic | Formula |
+| --- | --- |
+| Player blow | `(attack stat + flat) x (1 + item %) x (1 + class %) x U(0.92, 1.08)`, then critical |
+| Critical chance | `min(0.75, 0.10 + agility x 0.002 + items + class + effects)` |
+| Critical damage | `x min(3, 1.45 + class + items.critDamageBonus)` |
+| Enemy defense | `damage x (1 - min(0.85, 1 - 100 / (100 + defense x 2)))`, defense reduced by `armorPenetration` |
+| Resistance | `damage x (1 - clamp(resistance, -100, 75) / 100)` (non-physical types ignore defense) |
+| Player defense | `100 / (100 + defense x 2.5)`, never absorbing more than 85% |
+| Dodge (enemy attacks) | `min(0.30, agility x 0.003 + items.dodgeBonus)` |
+| Intelligence | `0.4%` resistance to non-physical damage per point |
+| Enemy attack | `strength x U(0.9, 1.1)`, 5% critical x1.5 |
+| XP to level up | `round(110 x level ^ 1.15)` |
+| Max health | `+9` per level, `+5` more every 10 levels |
+| Enemy scaling | `1 + 0.09 (L-1) + 0.003 (L-1)^2`; defense `1 + 0.06 (L-1)` |
+
+Item data read by the formulas: `critDamageBonus`, `armorPenetration`, `damageType` (weapons), `dodgeBonus`, `resistances: { fire: 25 }` (armor). Enemy definitions accept `resistances` and `damageType`; class definitions accept `statGrowth`.
+
 ### Logging
 
 Every message of the library is tagged (`[DoL:bank]`, `[DoL:combat]`, `[DoL:events]`...) through `consola` tags, so it can be filtered and attributed. The verbosity is controlled by a **log mode**:

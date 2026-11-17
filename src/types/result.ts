@@ -60,6 +60,8 @@ export interface DamageResult {
     rawDamage: number;
     /** `true` when a `playerDamage` listener cancelled the damage: nothing was applied (`reducedDamage` is 0). */
     cancelled?: boolean;
+    /** `true` when the player dodged the blow: nothing was applied (`reducedDamage` is 0). */
+    dodged?: boolean;
     /** The reason given by the listener that cancelled the damage, if any. */
     cancelReason?: string;
 }

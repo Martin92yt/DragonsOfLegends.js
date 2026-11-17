@@ -18,6 +18,7 @@ import JobManager from "./jobs/job.manager.js";
 import type { JobDefinition } from "./jobs/job.types.js";
 import BestiaryManager from "./bestiary/bestiary.manager.js";
 import type { BestiaryOptions } from "./bestiary/bestiary.types.js";
+import { resolveBalance, type BalanceConfig, type BalanceOptions } from "./balance/balance.js";
 import CraftingManager from "./crafting/crafting.manager.js";
 import EnchantingManager from "./enchanting/enchanting.manager.js";
 import FarmingManager from "./farming/farming.manager.js";
@@ -164,6 +165,11 @@ export interface WorldInitializationOptions {
   bankMaxGoldLimit?: number;
   /** Cost and effect of the bank upgrades (see {@link BankUpgradeOptions}). */
   bankUpgrades?: BankUpgradeOptions;
+  /**
+   * Balance factors of the combat and progression formulas (critical, defense, resistances, dodge, experience curve,
+   * enemy scaling...). A partial object merged with {@link DEFAULT_BALANCE}; see {@link BalanceConfig}.
+   */
+  balance?: BalanceOptions;
 
   regen?: {
     enabled: boolean;
@@ -192,6 +198,8 @@ export default class World extends EventEmitter {
   public readonly shops: ShopManager;
   /** Player classes. */
   public readonly classes: PlayerClassRegistry;
+  /** The resolved balance factors of the formulas. */
+  public readonly balance: BalanceConfig;
   /** Loads content packs (official and third-party) into the registries above. */
   public readonly content: ContentManager;
   public readonly events: GameEventEngine;
@@ -260,6 +268,7 @@ export default class World extends EventEmitter {
     resolveDeathItemLossConfig(this.initializationOptions.deathItemLoss);
     resolveItemBankCapacity(this.initializationOptions.bankCapacitySlots);
     resolveBankUpgradeConfig(this.initializationOptions.bankUpgrades);
+    this.balance = resolveBalance(this.initializationOptions.balance);
     parseDuration(this.initializationOptions.deathCooldown ?? "1m");
     resolveDeathRespawnConfig(this.initializationOptions.deathRespawn);
 
@@ -286,6 +295,7 @@ export default class World extends EventEmitter {
       this.enemies,
       this.initializationOptions.enemySpawnRules,
       (playerId) => this.players.peek(playerId),
+      this.balance,
     );
     this.players = new PlayerManager(this);
     this.bestiary = new BestiaryManager(

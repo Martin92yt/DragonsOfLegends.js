@@ -1,3 +1,4 @@
+import type { BalanceConfig } from "../balance/balance.js";
 import EnemyManager from "../enemy/enemy.manager.js";
 import type EnemyRegistry from "../enemy/enemy.registry.js";
 import type { EnemySpawnRule } from "../enemy/enemy.definition.js";
@@ -20,9 +21,10 @@ export default class CombatManager {
      * @param enemies The enemy registry spawns are drawn from. Without it, a private registry holding the official enemies is used.
      * @param spawnRules The rules choosing the enemy tier from the player level.
      * @param resolvePlayer Looks up a loaded player by identifier, so `attack` can report a death before anything else.
+     * @param balance The balance factors (enemy scaling). Defaults to {@link DEFAULT_BALANCE}.
      */
-    public constructor(enemies?: EnemyRegistry, spawnRules?: readonly EnemySpawnRule[], private readonly resolvePlayer?: (playerId: string) => PlayerEntity | undefined) {
-        this.enemyManagerInstance = new EnemyManager(enemies, spawnRules);
+    public constructor(enemies?: EnemyRegistry, spawnRules?: readonly EnemySpawnRule[], private readonly resolvePlayer?: (playerId: string) => PlayerEntity | undefined, balance?: BalanceConfig) {
+        this.enemyManagerInstance = new EnemyManager(enemies, spawnRules, balance);
     }
 
     /**

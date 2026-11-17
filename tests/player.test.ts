@@ -110,14 +110,15 @@ describe("PlayerEntity progression", () => {
         const result = player.addXP(110);
         await settle();
         assert.deepEqual(result, { gainedAmount: 110, totalExperience: 0, isLeveledUp: true, currentLevel: 2 });
-        assert.equal(player.experience.required, 220);
-        assert.deepEqual(player.attributes, { points: 1, strength: 11, agility: 5, intelligence: 4, defense: 9 });
+        // round(110 * 2 ** 1.15) = 244; the Warrior grows +2 strength, +0 agility, +0 intelligence, +2 defense.
+        assert.equal(player.experience.required, 244);
+        assert.deepEqual(player.attributes, { points: 1, strength: 12, agility: 4, intelligence: 3, defense: 10 });
         assert.equal(player.health.max, 85 + 2 * 9);
     });
 
     it("chains several level-ups from a single gain and keeps the remainder", async () => {
         const player = await spawn(createWorld());
-        const result = player.addXP(110 + 220 + 7);
+        const result = player.addXP(110 + 244 + 7);
         await settle();
         assert.equal(result.currentLevel, 3);
         assert.equal(result.totalExperience, 7);

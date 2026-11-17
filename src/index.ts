@@ -227,3 +227,7 @@ export type { CancellableEvent } from "./events/event.engine.js";
 
 // Logging
 export { createLogger, getLogMode, setLogMode, isLogMode, LOG_MODES, type LogMode, type TaggedLogger } from "./utils/logger.js";
+
+// Balance
+export { DEFAULT_BALANCE, resolveBalance, type BalanceConfig, type BalanceOptions } from "./balance/balance.js";
+export * as formulas from "./balance/formulas.js";

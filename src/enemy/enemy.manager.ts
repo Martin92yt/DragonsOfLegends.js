@@ -1,3 +1,5 @@
+import { DEFAULT_BALANCE, type BalanceConfig } from "../balance/balance.js";
+import { PHYSICAL, enemyDefenseScale, enemyScale } from "../balance/formulas.js";
 import Player from "../player/player.entity.js";
 import { NoEnemyAvailableError } from "../types/error.js";
 import { DEFAULT_ENEMY_SPAWN_RULES, type EnemyDefinition, type EnemySpawnRule } from "./enemy.definition.js";
@@ -14,7 +16,6 @@ const log = createLogger("enemy");
 export default class EnemyManager {
     // Rebalanced elite spawn frequency and stat scaling factor to curb exponential difficulty spikes.
     private static readonly ELITE_SPAWN_CHANCE = 0.08;
-    private static readonly BASE_STAT_SCALE_FACTOR = 0.09;
 
     private readonly registry: EnemyRegistry;
     private readonly spawnRules: readonly EnemySpawnRule[];
@@ -25,8 +26,9 @@ export default class EnemyManager {
      * @param registry The registry holding the enemy species. Defaults to a private registry preloaded with
      * the official enemies, which keeps `new EnemyManager()` usable on its own.
      * @param spawnRules The rules choosing the tier from the player level ({@link DEFAULT_ENEMY_SPAWN_RULES} by default).
+     * @param balance The balance factors of the enemy scaling ({@link DEFAULT_BALANCE} by default).
      */
-    public constructor(registry?: EnemyRegistry, spawnRules: readonly EnemySpawnRule[] = DEFAULT_ENEMY_SPAWN_RULES) {
+    public constructor(registry?: EnemyRegistry, spawnRules: readonly EnemySpawnRule[] = DEFAULT_ENEMY_SPAWN_RULES, private readonly balance: BalanceConfig = DEFAULT_BALANCE) {
         if (registry) {
             this.registry = registry;
         } else {
@@ -64,14 +66,15 @@ export default class EnemyManager {
         }
 
         const isEliteEnemy = Math.random() < EnemyManager.ELITE_SPAWN_CHANCE;
-        const statScalingMultiplier = 1 + Math.max(0, playerLevel - 1) * EnemyManager.BASE_STAT_SCALE_FACTOR;
+        const statScalingMultiplier = enemyScale(this.balance, playerLevel);
+        const defenseScalingMultiplier = enemyDefenseScale(this.balance, playerLevel);
         const eliteAttributeMultiplier = isEliteEnemy ? 1.4 : 1;
         const rewardMultiplier = isEliteEnemy ? 1.75 : 1;
 
         const resolvedEnemyName = isEliteEnemy ? `★ ${definition.name} (Elite)` : definition.name;
         const scaledHealthPoints = this.calculateStat(definition.health, statScalingMultiplier * eliteAttributeMultiplier);
         const scaledStrength = this.calculateStat(definition.strength, statScalingMultiplier * eliteAttributeMultiplier);
-        const scaledDefense = this.calculateStat(definition.defense, statScalingMultiplier * eliteAttributeMultiplier, 0);
+        const scaledDefense = this.calculateStat(definition.defense, defenseScalingMultiplier * eliteAttributeMultiplier, 0);
         const scaledExperienceReward = this.calculateStat(definition.experience, statScalingMultiplier * rewardMultiplier);
         const scaledGoldReward = this.calculateStat(definition.gold, statScalingMultiplier * rewardMultiplier);
 
@@ -87,7 +90,9 @@ export default class EnemyManager {
             scaledExperienceReward,
             scaledGoldReward,
             definition.loot ?? [],
-            definition.tier
+            definition.tier,
+            definition.resistances ?? {},
+            definition.damageType ?? PHYSICAL
         );
     }
 

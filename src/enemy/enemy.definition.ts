@@ -54,6 +54,13 @@ export interface EnemyDefinition {
     readonly experience: number;
     /** Base gold reward at player level 1. */
     readonly gold: number;
+    /**
+     * Resistances by damage type, in percent: `{ fire: 50 }` halves fire damage, `{ ice: -50 }` is a weakness (+50%).
+     * Physical damage is reduced by the defense instead; a `physical` entry adds a resistance on top of it.
+     */
+    readonly resistances?: Readonly<Record<string, number>>;
+    /** Type of the damage of the enemy's attacks. @defaultValue "physical" */
+    readonly damageType?: string;
     /** Loot table rolled when the enemy dies. */
     readonly loot?: readonly LootItem[];
     /** Bestiary text. Without it the enemy is listed with its name and an empty description. */

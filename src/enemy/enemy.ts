@@ -1,3 +1,5 @@
+import { DEFAULT_BALANCE, type BalanceConfig } from "../balance/balance.js";
+import { PHYSICAL, defenseFactor, penetrate, resistanceFactor, type DamageType } from "../balance/formulas.js";
 import { Item } from "../inventory/inventory.interface.js";
 import { createLogger } from "../utils/logger.js";
 const log = createLogger("enemy");
@@ -10,6 +12,18 @@ export interface EnemyStats {
     strength: number;
     defense: number;
     experience: number;
+}
+
+/**
+ * How a blow meets an enemy.
+ */
+export interface EnemyDamageOptions {
+    /** Type of the damage. @defaultValue "physical" */
+    readonly damageType?: DamageType;
+    /** Armor penetration of the attacker, in percent of the enemy defense. */
+    readonly armorPenetration?: number;
+    /** Balance factors. @defaultValue DEFAULT_BALANCE */
+    readonly balance?: BalanceConfig;
 }
 
 export interface LootItem extends Item {
@@ -43,18 +57,27 @@ export default class EnemyEntity {
         public readonly gold: number,
         private readonly lootTable: readonly LootItem[] = [],
         /** Difficulty tier of the species (`beginner`, `boss`...), when known. */
-        public readonly tier?: string
+        public readonly tier?: string,
+        /** Resistances by damage type, in percent (negative = weakness). */
+        public readonly resistances: Readonly<Record<string, number>> = {},
+        /** Type of the damage of its attacks. */
+        public readonly damageType: DamageType = PHYSICAL
     ) {}
 
-    public takeDamage(incomingDamage: number): number {
+    public takeDamage(incomingDamage: number, options: EnemyDamageOptions = {}): number {
         if (incomingDamage < 0) {
             log.warn(`Invalid negative damage value (${incomingDamage}) applied to enemy ${this.name}.`);
             return 0;
         }
 
-        // Rebalanced mitigation curve to prevent flat hard scaling from stalling out player builds.
-        const mitigation = Math.floor(this.defense * 0.4);
-        const calculatedFinalDamage = Math.max(1, incomingDamage - mitigation);
+        const balance = options.balance ?? DEFAULT_BALANCE;
+        const damageType = options.damageType ?? PHYSICAL;
+        // Physical damage meets the defense (after the armor penetration); other types meet the resistance of their type.
+        const afterDefense = damageType === PHYSICAL
+            ? incomingDamage * defenseFactor(balance, penetrate(balance, this.defense, options.armorPenetration ?? 0), balance.defense.enemyConstant)
+            : incomingDamage;
+        const afterResistance = afterDefense * resistanceFactor(balance, this.resistances[damageType] ?? 0);
+        const calculatedFinalDamage = Math.max(1, Math.floor(afterResistance));
         const previousHealthPoints = this.health;
         this.health = Math.max(0, this.health - calculatedFinalDamage);
 
